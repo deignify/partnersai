@@ -17,7 +17,7 @@ const Index = () => {
   const [otherName, setOtherName] = useState('');
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [memorySummary, setMemorySummary] = useState('');
-  const [styleProfile, setStyleProfile] = useState('');
+  const [partnerStyle, setPartnerStyle] = useState('');
   const { toast } = useToast();
 
   const handleParsed = useCallback((result: ParseResult) => {
@@ -42,16 +42,15 @@ const Index = () => {
     });
     await saveMessages(id, parseResult!.messages);
 
-    // Build memory in background
     try {
-      const { summary, styleProfile: sp } = await buildMemoryAndStyle(parseResult!.messages, me, other);
-      setMemorySummary(summary);
-      setStyleProfile(sp);
-      await updateSessionSummary(id, summary, sp);
+      const result = await buildMemoryAndStyle(parseResult!.messages, me, other);
+      setMemorySummary(result.summary);
+      setPartnerStyle(result.partnerStyle);
+      await updateSessionSummary(id, result.summary, result.partnerStyle);
     } catch (e: any) {
-      toast({ title: 'Memory warning', description: 'Using basic context. AI may be less accurate.' });
-      setMemorySummary('General conversation between two people.');
-      setStyleProfile('Default conversational style.');
+      toast({ title: 'Note', description: 'Using basic context mode.' });
+      setMemorySummary('A conversation between two partners.');
+      setPartnerStyle('Casual, loving texting style with emojis.');
     }
     setScreen('chat');
   }, [parseResult, toast]);
@@ -63,11 +62,11 @@ const Index = () => {
   if (screen === 'loading') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
-        <div className="w-12 h-12 rounded-2xl gradient-primary glow-primary flex items-center justify-center animate-pulse">
-          <span className="text-2xl">🧠</span>
+        <div className="w-14 h-14 rounded-2xl gradient-primary glow-primary flex items-center justify-center animate-pulse">
+          <span className="text-2xl">💕</span>
         </div>
-        <p className="text-sm text-muted-foreground animate-pulse">Learning your vibe...</p>
-        <p className="text-xs text-muted-foreground/50">Reading through your messages to understand your style</p>
+        <p className="text-sm text-muted-foreground animate-pulse">Learning how {otherName} texts...</p>
+        <p className="text-xs text-muted-foreground/40">Reading chat patterns, pet names, emojis & style</p>
       </div>
     );
   }
@@ -80,7 +79,7 @@ const Index = () => {
         meName={meName}
         otherName={otherName}
         memorySummary={memorySummary}
-        styleProfile={styleProfile}
+        partnerStyle={partnerStyle}
         onBack={() => setScreen('landing')}
       />
     );

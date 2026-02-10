@@ -14,8 +14,9 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // Build memory action
     if (body.action === "build-memory") {
-      const { sampleMessages, myTexts, meName, otherName } = body;
+      const { sampleMessages, myTexts, partnerTexts, meName, otherName } = body;
 
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -28,15 +29,19 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: `You analyze WhatsApp chat history. You must produce TWO sections:
-1. MEMORY SUMMARY: Key events, recurring topics, important dates, relationship dynamics, inside jokes. Max 500 words.
-2. STYLE PROFILE for "${meName}" ONLY: Average message length, emoji usage, punctuation style, common phrases, tone patterns, greeting/farewell style. Max 300 words.
+              content: `Analyze this WhatsApp chat and produce THREE sections as JSON:
 
-Return valid JSON: {"summary": "...", "styleProfile": "..."}`,
+1. "summary": Key relationship dynamics, recurring topics, inside jokes, important dates, how they talk to each other. Max 500 words.
+
+2. "partnerStyle": Detailed analysis of how "${otherName}" writes messages. Include: typical message length, emoji/emoticon usage, pet names they use, how they express love/anger/humor, common phrases, greeting style, texting quirks, language mixing patterns. Max 400 words.
+
+3. "styleProfile": How "${meName}" writes. Same analysis. Max 200 words.
+
+Return valid JSON with keys: summary, partnerStyle, styleProfile`,
             },
             {
               role: "user",
-              content: `Chat between ${meName} and ${otherName}:\n${sampleMessages}\n\n${meName}'s messages only:\n${myTexts}`,
+              content: `Full chat:\n${sampleMessages}\n\n${otherName}'s messages:\n${partnerTexts}\n\n${meName}'s messages:\n${myTexts}`,
             },
           ],
           tools: [{
@@ -47,10 +52,11 @@ Return valid JSON: {"summary": "...", "styleProfile": "..."}`,
               parameters: {
                 type: "object",
                 properties: {
-                  summary: { type: "string", description: "Memory summary of the conversation" },
-                  styleProfile: { type: "string", description: "Writing style profile of the user" },
+                  summary: { type: "string" },
+                  partnerStyle: { type: "string" },
+                  styleProfile: { type: "string" },
                 },
-                required: ["summary", "styleProfile"],
+                required: ["summary", "partnerStyle", "styleProfile"],
                 additionalProperties: false,
               },
             },
@@ -60,59 +66,68 @@ Return valid JSON: {"summary": "...", "styleProfile": "..."}`,
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        console.error("AI error:", response.status, errText);
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limited, try again shortly" }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+        const t = await response.text();
+        console.error("AI error:", response.status, t);
+        if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limited" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (response.status === 402) return new Response(JSON.stringify({ error: "Credits exhausted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         throw new Error("AI gateway error");
       }
 
       const data = await response.json();
       const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
       if (toolCall) {
-        const args = JSON.parse(toolCall.function.arguments);
-        return new Response(JSON.stringify(args), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(toolCall.function.arguments, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      
-      return new Response(JSON.stringify({ summary: "Could not analyze chat", styleProfile: "Default style" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ summary: "", partnerStyle: "", styleProfile: "" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Chat reply action — AI replies AS the partner
+    const { message, chatHistory, recentContext, memorySummary, partnerStyle, meName, otherName } = body;
+
+    const systemPrompt = `You ARE ${otherName}. You are chatting with ${meName} — your partner/lover. You reply EXACTLY like ${otherName} would based on their real texting style.
+
+RELATIONSHIP CONTEXT:
+${memorySummary}
+
+${otherName}'s EXACT TEXTING STYLE (copy this closely):
+${partnerStyle}
+
+RULES:
+- Reply as ${otherName} naturally, like a real WhatsApp message
+- Match their EXACT style: same emoji usage, same pet names, same language mixing, same message length
+- Be warm, natural, authentic — like a real partner texting
+- Keep responses short and casual like real texts (1-3 messages worth)
+- Use the same pet names and phrases ${otherName} actually uses
+- If ${meName} says something loving, respond lovingly in ${otherName}'s style
+- If ${meName} asks something, answer naturally as ${otherName} would
+- Never break character. You ARE ${otherName} texting on WhatsApp
+- Don't use markdown formatting, just plain text like real texting
+- You can use multiple short messages separated by newlines (like real WhatsApp)`;
+
+    const messages: any[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    // Add recent real chat context
+    if (recentContext) {
+      messages.push({
+        role: "system", 
+        content: `Recent real conversation for context:\n${recentContext}`
       });
     }
 
-    // Suggestion mode
-    const { draft, tone, recentContext, memorySummary, styleProfile, meName, otherName } = body;
+    // Add current session chat history
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) {
+        messages.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+        });
+      }
+    }
 
-    const toneInstructions: Record<string, string> = {
-      short: "Keep replies very brief, 1-2 sentences max.",
-      long: "Write detailed, thoughtful replies with 3-5 sentences.",
-      calm: "Use a calm, reassuring, gentle tone.",
-      romantic: "Be sweet, loving, and affectionate.",
-      apologetic: "Show genuine remorse and understanding.",
-      flirty: "Be playful, teasing, and charming.",
-      formal: "Use polite, respectful, professional language.",
-    };
-
-    const systemPrompt = `You are a writing assistant for ${meName}. You NEVER roleplay as ${otherName}. You NEVER pretend to be ${otherName}. You ONLY draft messages that ${meName} could send.
-
-CONVERSATION CONTEXT:
-${memorySummary}
-
-${meName}'s WRITING STYLE:
-${styleProfile}
-
-TONE: ${toneInstructions[tone || 'calm'] || toneInstructions.calm}
-
-Generate 4 different message suggestions that ${meName} could send. Each should match ${meName}'s style while applying the requested tone. Vary the suggestions from shorter to longer.`;
+    // Add current message
+    messages.push({ role: "user", content: message });
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -122,67 +137,21 @@ Generate 4 different message suggestions that ${meName} could send. Each should 
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Recent conversation:\n${recentContext}\n\n${meName}'s draft (may be empty): "${draft}"\n\nGenerate 4 reply suggestions for ${meName}.`,
-          },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "return_suggestions",
-            description: "Return message suggestions",
-            parameters: {
-              type: "object",
-              properties: {
-                suggestions: {
-                  type: "array",
-                  items: { type: "string" },
-                  description: "Array of 4 message suggestions",
-                },
-                reasoning: {
-                  type: "string",
-                  description: "Brief explanation of why these fit the user's style",
-                },
-              },
-              required: ["suggestions", "reasoning"],
-              additionalProperties: false,
-            },
-          },
-        }],
-        tool_choice: { type: "function", function: { name: "return_suggestions" } },
+        messages,
+        stream: true,
       }),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI error:", response.status, errText);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited" }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      const t = await response.text();
+      console.error("AI error:", response.status, t);
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limited" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 402) return new Response(JSON.stringify({ error: "Credits exhausted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       throw new Error("AI gateway error");
     }
 
-    const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall) {
-      const args = JSON.parse(toolCall.function.arguments);
-      return new Response(JSON.stringify(args), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify({ suggestions: ["I'll get back to you!"], reasoning: "" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(response.body, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
     console.error("Error:", e);

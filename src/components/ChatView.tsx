@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Sparkles, Loader2, MessageCircleHeart, RotateCw } from 'lucide-react';
+import { Send, ArrowLeft, MessageCircleHeart, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { streamPartnerReply } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
 import { useToast } from '@/hooks/use-toast';
-import ReactMarkdown from 'react-markdown';
+import { format } from 'date-fns';
 
 interface ChatViewProps {
   sessionId: string;
@@ -13,7 +13,7 @@ interface ChatViewProps {
   meName: string;
   otherName: string;
   memorySummary: string;
-  styleProfile: string;
+  partnerStyle: string;
   onBack: () => void;
 }
 
@@ -21,90 +21,83 @@ interface ChatMsg {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  timestamp: Date;
 }
 
-const TONE_CHIPS = [
-  { key: 'short', label: '✂️ Short' },
-  { key: 'romantic', label: '💕 Romantic' },
-  { key: 'flirty', label: '😏 Flirty' },
-  { key: 'calm', label: '😌 Calm' },
-  { key: 'apologetic', label: '🙏 Sorry' },
-  { key: 'formal', label: '👔 Formal' },
-];
-
-const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, styleProfile, onBack }: ChatViewProps) => {
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hey ${meName}! 👋 I've studied your chat history with ${otherName}. I know your vibe now!\n\nJust tell me what you want to say or what's the situation, and I'll suggest replies that sound like *you*. Pick a tone chip below or just type away! 💬`,
-    },
-  ]);
+const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, onBack }: ChatViewProps) => {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeTone, setActiveTone] = useState<string>('');
   const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, messages[messages.length - 1]?.content]);
 
-  const buildRecentContext = () => {
-    return importedMessages.slice(-30).map(m => {
-      const role = m.sender === meName ? 'Me' : otherName;
+  const buildRecentContext = useCallback(() => {
+    return importedMessages.slice(-40).map(m => {
+      const role = m.sender === meName ? meName : otherName;
       return `${role}: ${m.text}`;
     }).join('\n');
-  };
+  }, [importedMessages, meName, otherName]);
 
-  const sendMessage = async (userText?: string, tone?: string) => {
-    const text = userText || draft.trim();
-    if (!text && !tone) return;
+  const sendMessage = async () => {
+    const text = draft.trim();
+    if (!text || loading) return;
 
     const userMsg: ChatMsg = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: tone && !text ? `Give me suggestions in ${tone} tone` : text,
+      content: text,
+      timestamp: new Date(),
     };
+
     setMessages(prev => [...prev, userMsg]);
     setDraft('');
     setLoading(true);
 
+    // Reset textarea height
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+    const assistantId = crypto.randomUUID();
+    let assistantContent = '';
+
+    const chatHistory = [...messages, userMsg].map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // Add placeholder assistant message
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: new Date() }]);
+
     try {
-      const { data, error } = await supabase.functions.invoke('chat-suggest', {
-        body: {
-          draft: text,
-          tone: tone || activeTone || 'calm',
-          recentContext: buildRecentContext(),
-          memorySummary,
-          styleProfile,
-          meName,
-          otherName,
+      await streamPartnerReply({
+        message: text,
+        chatHistory: chatHistory.slice(-20), // last 20 messages for context
+        recentContext: buildRecentContext(),
+        memorySummary,
+        partnerStyle,
+        meName,
+        otherName,
+        onDelta: (chunk) => {
+          assistantContent += chunk;
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content: assistantContent } : m)
+          );
+        },
+        onDone: () => {
+          setLoading(false);
         },
       });
-
-      if (error) throw new Error(error.message);
-
-      const suggestions = data.suggestions || [];
-      const reasoning = data.reasoning || '';
-
-      let reply = suggestions.map((s: string, i: number) => `**Option ${i + 1}:** ${s}`).join('\n\n');
-      if (reasoning) reply += `\n\n---\n💡 *${reasoning}*`;
-
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: reply,
-      }]);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '😵 Something went wrong. Try again?',
-      }]);
+      setMessages(prev =>
+        prev.map(m => m.id === assistantId ? { ...m, content: 'connection lost 😢 try again?' } : m)
+      );
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -114,63 +107,110 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     }
   };
 
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(e.target.value);
+    // Auto-resize
+    const ta = e.target;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  };
+
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-card border-b border-border/50 shrink-0">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
-          <ArrowLeft className="w-4 h-4" />
+      <div className="flex items-center gap-3 px-4 py-3 bg-card border-b border-border/40 shrink-0">
+        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 -ml-1">
+          <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center shrink-0">
-            <MessageCircleHeart className="w-4 h-4 text-primary-foreground" />
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0 glow-primary">
+            <MessageCircleHeart className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold">PartnerAI</h2>
-            <p className="text-[11px] text-muted-foreground">Your reply assistant for {otherName}</p>
+            <h2 className="text-sm font-bold">{otherName}</h2>
+            <p className="text-[11px] text-primary/80">
+              {loading ? 'typing...' : 'online'}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Chat area */}
+      <div
+        className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5"
+        style={{
+          backgroundImage: `radial-gradient(circle at 20% 80%, hsl(var(--primary) / 0.03) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 20%, hsl(var(--accent) / 0.03) 0%, transparent 50%)`,
+        }}
+      >
+        {/* Empty state */}
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center glow-primary">
+              <MessageCircleHeart className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground max-w-[240px]">
+              Say hi to <span className="text-primary font-semibold">{otherName}</span> 💕
+              <br />
+              <span className="text-xs">They'll reply just like the real thing</span>
+            </p>
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed
-                  ${msg.role === 'user'
-                    ? 'bg-chat-me text-chat-me-foreground rounded-2xl rounded-tr-md'
-                    : 'bg-chat-ai text-chat-ai-foreground rounded-2xl rounded-tl-md border border-border/30'
-                  }`}
-              >
-                {msg.role === 'assistant' ? (
-                  <div className="prose prose-sm prose-invert max-w-none [&_p]:my-1 [&_strong]:text-primary [&_em]:text-muted-foreground [&_hr]:border-border/30 [&_hr]:my-2">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+          {messages.map((msg, i) => {
+            const isMe = msg.role === 'user';
+            const showTime = i === 0 || 
+              (msg.timestamp.getTime() - messages[i-1].timestamp.getTime()) > 300000; // 5 min gap
+
+            return (
+              <div key={msg.id}>
+                {showTime && (
+                  <div className="flex justify-center my-3">
+                    <span className="px-3 py-1 rounded-full bg-muted/50 text-[10px] text-muted-foreground">
+                      {format(msg.timestamp, 'h:mm a')}
+                    </span>
                   </div>
-                ) : (
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
                 )}
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.15 }}
+                  className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] px-3.5 py-2 text-[14px] leading-relaxed shadow-sm
+                      ${isMe
+                        ? 'bg-chat-me text-chat-me-foreground rounded-2xl rounded-br-md'
+                        : 'bg-chat-ai text-chat-ai-foreground rounded-2xl rounded-bl-md border border-border/20'
+                      }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                    {msg.content && (
+                      <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-chat-me-foreground/40' : 'text-chat-ai-foreground/40'}`}>
+                        {format(msg.timestamp, 'h:mm a')}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
               </div>
-            </motion.div>
-          ))}
+            );
+          })}
         </AnimatePresence>
 
-        {loading && (
+        {/* Typing indicator */}
+        {loading && messages[messages.length - 1]?.role === 'assistant' && !messages[messages.length - 1]?.content && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="bg-chat-ai border border-border/30 rounded-2xl rounded-tl-md px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Crafting replies...</span>
+            <div className="bg-chat-ai border border-border/20 rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </motion.div>
         )}
@@ -178,47 +218,26 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         <div ref={endRef} />
       </div>
 
-      {/* Tone chips */}
-      <div className="px-4 py-2 border-t border-border/30 bg-chat-composer">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {TONE_CHIPS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => {
-                setActiveTone(t.key);
-                if (!draft.trim()) sendMessage(undefined, t.key);
-              }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all
-                ${activeTone === t.key
-                  ? 'gradient-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-primary/15'
-                }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Composer */}
-      <div className="px-4 py-3 bg-chat-composer border-t border-border/30 shrink-0">
+      <div className="px-3 py-3 bg-chat-composer border-t border-border/30 shrink-0">
         <div className="flex items-end gap-2">
-          <div className="flex-1 bg-secondary/60 rounded-2xl px-4 py-2.5 border border-border/30">
+          <div className="flex-1 bg-secondary/50 rounded-2xl px-4 py-2.5 border border-border/30 focus-within:border-primary/30 transition-colors">
             <textarea
+              ref={textareaRef}
               value={draft}
-              onChange={e => setDraft(e.target.value)}
+              onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="What do you want to say to them?"
+              placeholder={`Message ${otherName}...`}
               rows={1}
-              className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-muted-foreground/60 max-h-24"
-              style={{ minHeight: '20px' }}
+              className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-muted-foreground/50 max-h-[120px]"
+              style={{ minHeight: '22px' }}
             />
           </div>
           <Button
-            onClick={() => sendMessage()}
+            onClick={sendMessage}
             disabled={!draft.trim() || loading}
             size="icon"
-            className="rounded-full shrink-0 gradient-primary border-0 h-10 w-10"
+            className="rounded-full shrink-0 gradient-primary border-0 h-10 w-10 shadow-lg"
           >
             <Send className="w-4 h-4" />
           </Button>
