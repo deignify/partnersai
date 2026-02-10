@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, ArrowLeft, Phone, Video, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ interface ChatViewProps {
   otherName: string;
   memorySummary: string;
   partnerStyle: string;
+  existingMessages?: { role: string; content: string; created_at: string }[];
   onBack: () => void;
 }
 
@@ -65,8 +67,18 @@ function useVisualViewport() {
   return vp;
 }
 
-const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, onBack }: ChatViewProps) => {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, existingMessages, onBack }: ChatViewProps) => {
+  const [messages, setMessages] = useState<ChatMsg[]>(() => {
+    if (existingMessages && existingMessages.length > 0) {
+      return existingMessages.map((m, i) => ({
+        id: `existing-${i}`,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.created_at),
+      }));
+    }
+    return [];
+  });
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -120,6 +132,14 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     setLoading(true);
     setTyping(true);
 
+    // Persist user message to DB
+    supabase.from('chat_messages').insert({
+      session_id: sessionId,
+      user_id: (await supabase.auth.getUser()).data.user?.id ?? '',
+      role: 'user',
+      content: msgText,
+    }).then();
+
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     const assistantId = crypto.randomUUID();
@@ -152,7 +172,18 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         onDone: () => {
           setLoading(false);
           setTyping(false);
-          if (assistantContent) loadSuggestions(assistantContent);
+          if (assistantContent) {
+            loadSuggestions(assistantContent);
+            // Persist assistant message to DB
+            supabase.auth.getUser().then(({ data }) => {
+              supabase.from('chat_messages').insert({
+                session_id: sessionId,
+                user_id: data.user?.id ?? '',
+                role: 'assistant',
+                content: assistantContent,
+              }).then();
+            });
+          }
         },
       });
     } catch (e: any) {
