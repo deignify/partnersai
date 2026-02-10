@@ -31,16 +31,18 @@ function randomDelay() {
   return TYPING_DELAY_MIN + Math.random() * (TYPING_DELAY_MAX - TYPING_DELAY_MIN);
 }
 
-/** Hook that returns a stable viewport height that works on iOS Safari */
-function useViewportHeight() {
-  const [height, setHeight] = useState(() =>
-    window.visualViewport?.height ?? window.innerHeight
-  );
+/** Hook that returns stable viewport dimensions for iOS Safari */
+function useVisualViewport() {
+  const [vp, setVp] = useState({ height: window.innerHeight, offsetTop: 0 });
 
   useEffect(() => {
     const update = () => {
-      const h = window.visualViewport?.height ?? window.innerHeight;
-      setHeight(h);
+      const vv = window.visualViewport;
+      if (vv) {
+        setVp({ height: vv.height, offsetTop: vv.offsetTop });
+      } else {
+        setVp({ height: window.innerHeight, offsetTop: 0 });
+      }
     };
 
     const vv = window.visualViewport;
@@ -49,6 +51,7 @@ function useViewportHeight() {
       vv.addEventListener('scroll', update);
     }
     window.addEventListener('resize', update);
+    update();
 
     return () => {
       if (vv) {
@@ -59,7 +62,7 @@ function useViewportHeight() {
     };
   }, []);
 
-  return height;
+  return vp;
 }
 
 const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, onBack }: ChatViewProps) => {
@@ -71,7 +74,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
-  const vpHeight = useViewportHeight();
+  const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
 
   // Lock body scroll
   useEffect(() => {
@@ -180,8 +183,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden"
-      style={{ height: `${vpHeight}px` }}
+      className="fixed left-0 right-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden"
+      style={{ height: `${vpHeight}px`, top: `${vpOffset}px` }}
     >
       {/* Header */}
       <header className="flex items-center gap-2 px-2 py-2 bg-card border-b border-border/30 shrink-0 z-20">
