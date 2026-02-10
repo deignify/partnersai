@@ -37,28 +37,23 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const [loading, setLoading] = useState(false);
   const [typing, setTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Track visual viewport to handle mobile keyboard
+  // Use CSS dvh + overflow hidden on html/body to prevent mobile issues
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
+    // Prevent body scroll so only chat area scrolls
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.height = '100%';
+    document.body.style.height = '100%';
 
-    const onResize = () => {
-      setViewportHeight(vv.height);
-      // Scroll to keep composer visible
-      endRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    vv.addEventListener('resize', onResize);
-    vv.addEventListener('scroll', onResize);
     return () => {
-      vv.removeEventListener('resize', onResize);
-      vv.removeEventListener('scroll', onResize);
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      document.documentElement.style.height = '';
+      document.body.style.height = '';
     };
   }, []);
 
@@ -158,13 +153,10 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const initial = otherName.charAt(0).toUpperCase();
 
   return (
-    <div
-      ref={containerRef}
-      className="fixed inset-x-0 top-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden"
-      style={{ height: `${viewportHeight}px` }}
-    >
+    <div className="flex flex-col bg-background max-w-lg mx-auto" style={{ height: '100dvh' }}>
       {/* WhatsApp-style Header */}
-      <div className="flex items-center gap-2 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-card border-b border-border/30 shrink-0 z-10">
+      <div className="flex items-center gap-2 px-2 py-2 bg-card border-b border-border/30 shrink-0 z-10"
+           style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -192,7 +184,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
 
       {/* Chat Messages */}
       <div
-        className="flex-1 overflow-y-auto px-3 py-3 space-y-1"
+        className="flex-1 overflow-y-auto px-3 py-3 space-y-1 min-h-0"
         style={{
           backgroundImage: `radial-gradient(circle at 20% 80%, hsl(var(--primary) / 0.04) 0%, transparent 50%),
                             radial-gradient(circle at 80% 20%, hsl(var(--accent) / 0.03) 0%, transparent 50%)`,
@@ -291,8 +283,9 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </div>
       )}
 
-      {/* Composer - always visible */}
-      <div className="px-3 py-2 bg-chat-composer border-t border-border/20 shrink-0">
+      {/* Composer */}
+      <div className="px-3 py-2 bg-chat-composer border-t border-border/20 shrink-0"
+           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
         <div className="flex items-end gap-2.5">
           <div className="flex-1 min-w-0 bg-secondary/40 rounded-3xl px-4 py-2.5 border border-border/20 focus-within:border-primary/30 transition-colors">
             <textarea
