@@ -31,6 +31,37 @@ function randomDelay() {
   return TYPING_DELAY_MIN + Math.random() * (TYPING_DELAY_MAX - TYPING_DELAY_MIN);
 }
 
+/** Hook that returns a stable viewport height that works on iOS Safari */
+function useViewportHeight() {
+  const [height, setHeight] = useState(() =>
+    window.visualViewport?.height ?? window.innerHeight
+  );
+
+  useEffect(() => {
+    const update = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      setHeight(h);
+    };
+
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', update);
+      vv.addEventListener('scroll', update);
+    }
+    window.addEventListener('resize', update);
+
+    return () => {
+      if (vv) {
+        vv.removeEventListener('resize', update);
+        vv.removeEventListener('scroll', update);
+      }
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return height;
+}
+
 const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, onBack }: ChatViewProps) => {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
@@ -40,20 +71,16 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const vpHeight = useViewportHeight();
 
-  // Use CSS dvh + overflow hidden on html/body to prevent mobile issues
+  // Lock body scroll
   useEffect(() => {
-    // Prevent body scroll so only chat area scrolls
+    const orig = document.body.style.cssText;
+    document.body.style.cssText = 'overflow:hidden;position:fixed;width:100%;height:100%;';
     document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.height = '100%';
-    document.body.style.height = '100%';
-
     return () => {
+      document.body.style.cssText = orig;
       document.documentElement.style.overflow = '';
-      document.body.style.overflow = '';
-      document.documentElement.style.height = '';
-      document.body.style.height = '';
     };
   }, []);
 
@@ -101,7 +128,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     }));
 
     await new Promise(r => setTimeout(r, randomDelay()));
-
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: new Date() }]);
 
     try {
@@ -153,10 +179,12 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const initial = otherName.charAt(0).toUpperCase();
 
   return (
-    <div className="flex flex-col bg-background max-w-lg mx-auto" style={{ height: '100dvh' }}>
-      {/* WhatsApp-style Header */}
-      <div className="flex items-center gap-2 px-2 py-2 bg-card border-b border-border/30 shrink-0 z-10"
-           style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
+    <div
+      className="fixed top-0 left-0 right-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden"
+      style={{ height: `${vpHeight}px` }}
+    >
+      {/* Header */}
+      <header className="flex items-center gap-2 px-2 py-2 bg-card border-b border-border/30 shrink-0 z-20">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -169,7 +197,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
             {typing ? 'typing...' : 'online'}
           </p>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center">
           <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
             <Video className="w-5 h-5" />
           </Button>
@@ -180,9 +208,9 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
             <MoreVertical className="w-5 h-5" />
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Chat Messages */}
+      {/* Messages */}
       <div
         className="flex-1 overflow-y-auto px-3 py-3 space-y-1 min-h-0"
         style={{
@@ -205,8 +233,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => {
             const isMe = msg.role === 'user';
-            const showTime = i === 0 || 
-              (msg.timestamp.getTime() - messages[i-1].timestamp.getTime()) > 300000;
+            const showTime = i === 0 ||
+              (msg.timestamp.getTime() - messages[i - 1].timestamp.getTime()) > 300000;
 
             return (
               <div key={msg.id}>
@@ -224,13 +252,13 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                   className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-0.5`}
                 >
                   <div
-                    className={`max-w-[78%] px-3 py-1.5 text-[14px] leading-relaxed relative
+                    className={`max-w-[78%] px-3 py-1.5 text-[14px] leading-relaxed
                       ${isMe
                         ? 'bg-chat-me text-chat-me-foreground rounded-xl rounded-br-sm'
                         : 'bg-chat-ai text-chat-ai-foreground rounded-xl rounded-bl-sm border border-border/15'
                       }`}
                   >
-                    {!isMe && (i === 0 || messages[i-1]?.role === 'user') && (
+                    {!isMe && (i === 0 || messages[i - 1]?.role === 'user') && (
                       <p className="text-[11px] font-semibold text-primary mb-0.5">{otherName}</p>
                     )}
                     <div className="flex items-end gap-2">
@@ -250,11 +278,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </AnimatePresence>
 
         {typing && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex justify-start mb-0.5"
-          >
+          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start mb-0.5">
             <div className="bg-chat-ai border border-border/15 rounded-xl rounded-bl-sm px-4 py-2.5">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -283,10 +307,9 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </div>
       )}
 
-      {/* Composer */}
-      <div className="px-3 py-2 bg-chat-composer border-t border-border/20 shrink-0"
-           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
-        <div className="flex items-end gap-2.5">
+      {/* Composer — always at bottom of visual viewport */}
+      <div className="shrink-0 bg-chat-composer border-t border-border/20 px-3 py-2 z-20">
+        <div className="flex items-end gap-3">
           <div className="flex-1 min-w-0 bg-secondary/40 rounded-3xl px-4 py-2.5 border border-border/20 focus-within:border-primary/30 transition-colors">
             <textarea
               ref={textareaRef}
@@ -295,18 +318,17 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
               onKeyDown={handleKeyDown}
               placeholder="Message..."
               rows={1}
-              className="w-full bg-transparent text-sm outline-none resize-none placeholder:text-muted-foreground/40 max-h-[120px]"
-              style={{ minHeight: '20px' }}
+              className="w-full bg-transparent text-[16px] outline-none resize-none placeholder:text-muted-foreground/40 max-h-[120px]"
+              style={{ minHeight: '22px' }}
             />
           </div>
-          <Button
+          <button
             onClick={() => sendMessage()}
             disabled={!draft.trim() || loading}
-            size="icon"
-            className="rounded-full shrink-0 gradient-primary border-0 h-10 w-10 shadow-md flex-none"
+            className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 shadow-md disabled:opacity-40 active:scale-95 transition-transform"
           >
-            <Send className="w-4 h-4" />
-          </Button>
+            <Send className="w-[18px] h-[18px] text-primary-foreground" />
+          </button>
         </div>
       </div>
     </div>
