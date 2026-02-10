@@ -2,3 +2,9 @@ project_id = "gpfzjmjvrhfzwlrtffee"
 
 [functions.chat-suggest]
 verify_jwt = false
+
+[functions.razorpay-create-order]
+verify_jwt = false
+
+[functions.razorpay-verify]
+verify_jwt = false

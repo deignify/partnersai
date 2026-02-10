@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { format } from 'date-fns';
 
 interface ChatViewProps {
@@ -93,6 +94,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const { canSendMessage, messagesUsedToday, maxMessages, plan, incrementUsage } = useSubscription();
   const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
 
   // Lock body scroll
@@ -125,6 +127,21 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const sendMessage = async (text?: string) => {
     const msgText = (text || draft).trim();
     if (!msgText || loading) return;
+
+    if (!canSendMessage) {
+      toast({
+        title: 'Daily limit reached',
+        description: 'Upgrade to Pro for unlimited messages! 💎',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const allowed = await incrementUsage();
+    if (!allowed) {
+      toast({ title: 'Daily limit reached', description: 'Upgrade to Pro for unlimited messages!', variant: 'destructive' });
+      return;
+    }
 
     const userMsg: ChatMsg = {
       id: crypto.randomUUID(),
@@ -358,6 +375,18 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </div>
       )}
 
+      {/* Usage indicator for free users */}
+      {plan === 'free' && (
+        <div className="shrink-0 px-4 py-1 bg-card/50 border-t border-border/10 flex items-center justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {messagesUsedToday}/{maxMessages} messages today
+          </p>
+          {!canSendMessage && (
+            <p className="text-[10px] text-primary font-medium">Upgrade for unlimited →</p>
+          )}
+        </div>
+      )}
+
       {/* Composer — always at bottom of visual viewport */}
       <div className="shrink-0 bg-chat-composer border-t border-border/20 px-3 py-2 z-20">
         <div className="flex items-end gap-3">
@@ -367,15 +396,16 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
               value={draft}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Message..."
+              placeholder={canSendMessage ? "Message..." : "Daily limit reached — Upgrade to Pro"}
               rows={1}
-              className="w-full bg-transparent text-[16px] outline-none resize-none placeholder:text-muted-foreground/40 max-h-[120px]"
+              disabled={!canSendMessage}
+              className="w-full bg-transparent text-[16px] outline-none resize-none placeholder:text-muted-foreground/40 max-h-[120px] disabled:opacity-50"
               style={{ minHeight: '22px' }}
             />
           </div>
           <button
             onClick={() => sendMessage()}
-            disabled={!draft.trim() || loading}
+            disabled={!draft.trim() || loading || !canSendMessage}
             className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 shadow-md disabled:opacity-40 active:scale-95 transition-transform"
           >
             <Send className="w-[18px] h-[18px] text-primary-foreground" />
