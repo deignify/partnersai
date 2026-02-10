@@ -1,68 +1,127 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { ParsedMessage } from './chatParser';
 
-export type ToneStyle = 'short' | 'long' | 'calm' | 'romantic' | 'apologetic' | 'flirty' | 'formal';
-
-export interface SuggestionRequest {
-  draft: string;
-  tone?: ToneStyle;
-  recentMessages: ParsedMessage[];
-  memorySummary: string;
-  styleProfile: string;
-  meName: string;
-  otherName: string;
-}
-
-export interface SuggestionResponse {
-  suggestions: string[];
-  reasoning?: string;
-}
-
-export async function getSuggestions(req: SuggestionRequest): Promise<SuggestionResponse> {
-  const recentContext = req.recentMessages.slice(-30).map(m => {
-    const role = m.sender === req.meName ? 'Me' : req.otherName;
-    return `${role}: ${m.text}`;
-  }).join('\n');
-
-  const { data, error } = await supabase.functions.invoke('chat-suggest', {
-    body: {
-      draft: req.draft,
-      tone: req.tone || 'calm',
-      recentContext,
-      memorySummary: req.memorySummary,
-      styleProfile: req.styleProfile,
-      meName: req.meName,
-      otherName: req.otherName,
-    },
-  });
-
-  if (error) throw new Error(error.message || 'Failed to get suggestions');
-  return data as SuggestionResponse;
-}
-
 export async function buildMemoryAndStyle(
   messages: ParsedMessage[],
   meName: string,
   otherName: string
-): Promise<{ summary: string; styleProfile: string }> {
+): Promise<{ summary: string; partnerStyle: string; styleProfile: string }> {
   const myMessages = messages.filter(m => m.sender === meName);
-  const sampleMessages = messages.slice(-200).map(m => {
-    const role = m.sender === meName ? 'Me' : otherName;
+  const partnerMessages = messages.filter(m => m.sender === otherName);
+  
+  const sampleMessages = messages.slice(-300).map(m => {
+    const role = m.sender === meName ? meName : otherName;
     return `${role}: ${m.text}`;
   }).join('\n');
 
-  const myTexts = myMessages.slice(-100).map(m => m.text).join('\n');
+  const myTexts = myMessages.slice(-150).map(m => m.text).join('\n');
+  const partnerTexts = partnerMessages.slice(-150).map(m => m.text).join('\n');
 
   const { data, error } = await supabase.functions.invoke('chat-suggest', {
     body: {
       action: 'build-memory',
       sampleMessages,
       myTexts,
+      partnerTexts,
       meName,
       otherName,
     },
   });
 
   if (error) throw new Error(error.message || 'Failed to build memory');
-  return data as { summary: string; styleProfile: string };
+  return data as { summary: string; partnerStyle: string; styleProfile: string };
+}
+
+export interface StreamChatOptions {
+  message: string;
+  chatHistory: { role: string; content: string }[];
+  recentContext: string;
+  memorySummary: string;
+  partnerStyle: string;
+  meName: string;
+  otherName: string;
+  onDelta: (text: string) => void;
+  onDone: () => void;
+}
+
+export async function streamPartnerReply(opts: StreamChatOptions) {
+  const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-suggest`;
+
+  const resp = await fetch(CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({
+      message: opts.message,
+      chatHistory: opts.chatHistory,
+      recentContext: opts.recentContext,
+      memorySummary: opts.memorySummary,
+      partnerStyle: opts.partnerStyle,
+      meName: opts.meName,
+      otherName: opts.otherName,
+    }),
+  });
+
+  if (!resp.ok || !resp.body) {
+    if (resp.status === 429) throw new Error('Rate limited, try again shortly');
+    if (resp.status === 402) throw new Error('AI credits exhausted');
+    throw new Error('Failed to get reply');
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let textBuffer = '';
+  let streamDone = false;
+
+  while (!streamDone) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    textBuffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex: number;
+    while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+      let line = textBuffer.slice(0, newlineIndex);
+      textBuffer = textBuffer.slice(newlineIndex + 1);
+
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (line.startsWith(':') || line.trim() === '') continue;
+      if (!line.startsWith('data: ')) continue;
+
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === '[DONE]') {
+        streamDone = true;
+        break;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (content) opts.onDelta(content);
+      } catch {
+        textBuffer = line + '\n' + textBuffer;
+        break;
+      }
+    }
+  }
+
+  // Final flush
+  if (textBuffer.trim()) {
+    for (let raw of textBuffer.split('\n')) {
+      if (!raw) continue;
+      if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+      if (raw.startsWith(':') || raw.trim() === '') continue;
+      if (!raw.startsWith('data: ')) continue;
+      const jsonStr = raw.slice(6).trim();
+      if (jsonStr === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (content) opts.onDelta(content);
+      } catch { /* ignore */ }
+    }
+  }
+
+  opts.onDone();
 }
