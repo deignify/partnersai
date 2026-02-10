@@ -139,9 +139,9 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const initial = otherName.charAt(0).toUpperCase();
 
   return (
-    <div className="h-screen flex flex-col bg-background max-w-lg mx-auto">
+    <div className="h-[100dvh] flex flex-col bg-background max-w-lg mx-auto">
       {/* WhatsApp-style Header */}
-      <div className="flex items-center gap-2 px-2 py-2 bg-card border-b border-border/30 shrink-0">
+      <div className="flex items-center gap-2 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-card border-b border-border/30 shrink-0">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -272,7 +272,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
       )}
 
       {/* Composer */}
-      <div className="px-2 py-2 bg-chat-composer border-t border-border/20 shrink-0">
+      <div className="px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-chat-composer border-t border-border/20 shrink-0">
         <div className="flex items-end gap-2">
           <div className="flex-1 bg-secondary/40 rounded-3xl px-4 py-2 border border-border/20 focus-within:border-primary/30 transition-colors">
             <textarea
