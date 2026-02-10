@@ -30,7 +30,8 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) throw new Error('Unauthorized');
 
     const adminSupabase = createClient(
@@ -38,17 +39,23 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const { data: roleData } = await adminSupabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle();
-
-    if (!roleData) throw new Error('Forbidden: Admin access required');
-
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
+
+    // Actions that don't require admin
+    const userActions = ['validate-promo', 'redeem-promo'];
+    const isUserAction = userActions.includes(action || '');
+
+    if (!isUserAction) {
+      const { data: roleData } = await adminSupabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!roleData) throw new Error('Forbidden: Admin access required');
+    }
 
     // GET actions
     if (req.method === 'GET') {
