@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function getDurationEnd(duration: string): Date {
+  const now = new Date();
+  switch (duration) {
+    case 'week': now.setDate(now.getDate() + 7); break;
+    case 'month': now.setMonth(now.getMonth() + 1); break;
+    case 'year': now.setFullYear(now.getFullYear() + 1); break;
+    default: now.setMonth(now.getMonth() + 1);
+  }
+  return now;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -22,7 +33,6 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
-    // Check admin role
     const adminSupabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -56,6 +66,7 @@ serve(async (req) => {
             created_at: u.created_at,
             last_sign_in_at: u.last_sign_in_at,
             plan: sub?.plan || 'free',
+            plan_duration: sub?.plan_duration || 'month',
             subscription_status: sub?.status || 'none',
             current_period_end: sub?.current_period_end,
             roles: userRoles,
@@ -73,13 +84,26 @@ serve(async (req) => {
         const totalUsers = users?.users?.length || 0;
         const proUsers = subs?.filter(s => s.plan === 'pro' && s.status === 'active').length || 0;
         const { count: totalMessages } = await adminSupabase.from('chat_messages').select('*', { count: 'exact', head: true });
+        const { count: totalPromos } = await adminSupabase.from('promo_codes').select('*', { count: 'exact', head: true });
 
         return new Response(JSON.stringify({
           totalUsers,
           proUsers,
           freeUsers: totalUsers - proUsers,
           totalMessages: totalMessages || 0,
+          totalPromos: totalPromos || 0,
         }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'promo-codes') {
+        const { data: promos } = await adminSupabase
+          .from('promo_codes')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        return new Response(JSON.stringify({ promos: promos || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -90,17 +114,16 @@ serve(async (req) => {
       const body = await req.json();
 
       if (action === 'update-subscription') {
-        const { userId, plan, status } = body;
-        const now = new Date();
-        const periodEnd = new Date(now);
-        periodEnd.setMonth(periodEnd.getMonth() + 1);
+        const { userId, plan, status, duration } = body;
+        const periodEnd = plan === 'pro' ? getDurationEnd(duration || 'month') : null;
 
         await adminSupabase.from('user_subscriptions').upsert({
           user_id: userId,
           plan,
           status,
-          current_period_start: now.toISOString(),
-          current_period_end: plan === 'pro' ? periodEnd.toISOString() : null,
+          plan_duration: duration || 'month',
+          current_period_start: new Date().toISOString(),
+          current_period_end: periodEnd?.toISOString() || null,
         }, { onConflict: 'user_id' });
 
         return new Response(JSON.stringify({ success: true }), {
@@ -118,10 +141,7 @@ serve(async (req) => {
 
       if (action === 'add-admin') {
         const { userId } = body;
-        await adminSupabase.from('user_roles').upsert({
-          user_id: userId,
-          role: 'admin',
-        }, { onConflict: 'user_id,role' });
+        await adminSupabase.from('user_roles').upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id,role' });
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -142,6 +162,138 @@ serve(async (req) => {
         await adminSupabase.from('chat_sessions').delete().eq('user_id', userId);
         await adminSupabase.from('daily_usage').delete().eq('user_id', userId);
         return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Promo code actions
+      if (action === 'create-promo') {
+        const { code, discount_type, discount_value, max_uses, valid_from, valid_until, plan_duration, is_active } = body;
+        const { error } = await adminSupabase.from('promo_codes').insert({
+          code: code.toUpperCase(),
+          discount_type,
+          discount_value,
+          max_uses: max_uses || null,
+          valid_from: valid_from || new Date().toISOString(),
+          valid_until: valid_until || null,
+          plan_duration: plan_duration || 'month',
+          is_active: is_active !== false,
+          created_by: user.id,
+        });
+        if (error) throw new Error(error.message);
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'update-promo') {
+        const { promoId, ...updates } = body;
+        if (updates.code) updates.code = updates.code.toUpperCase();
+        const { error } = await adminSupabase.from('promo_codes').update(updates).eq('id', promoId);
+        if (error) throw new Error(error.message);
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'delete-promo') {
+        const { promoId } = body;
+        await adminSupabase.from('promo_codes').delete().eq('id', promoId);
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Validate promo code (for users)
+      if (action === 'validate-promo') {
+        const { code } = body;
+        const { data: promo } = await adminSupabase
+          .from('promo_codes')
+          .select('*')
+          .eq('code', code.toUpperCase())
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!promo) {
+          return new Response(JSON.stringify({ valid: false, error: 'Invalid promo code' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Check expiry
+        if (promo.valid_until && new Date(promo.valid_until) < new Date()) {
+          return new Response(JSON.stringify({ valid: false, error: 'Promo code expired' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Check max uses
+        if (promo.max_uses && promo.times_used >= promo.max_uses) {
+          return new Response(JSON.stringify({ valid: false, error: 'Promo code fully redeemed' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Check if user already used
+        const { data: existing } = await adminSupabase
+          .from('promo_redemptions')
+          .select('id')
+          .eq('promo_code_id', promo.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (existing) {
+          return new Response(JSON.stringify({ valid: false, error: 'Already used this promo code' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify({
+          valid: true,
+          discount_type: promo.discount_type,
+          discount_value: promo.discount_value,
+          plan_duration: promo.plan_duration,
+          promo_id: promo.id,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Redeem promo code
+      if (action === 'redeem-promo') {
+        const { promoId } = body;
+        const { data: promo } = await adminSupabase
+          .from('promo_codes')
+          .select('*')
+          .eq('id', promoId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!promo) throw new Error('Invalid promo code');
+
+        // Record redemption
+        await adminSupabase.from('promo_redemptions').insert({
+          promo_code_id: promoId,
+          user_id: user.id,
+        });
+
+        // Increment times_used
+        await adminSupabase.from('promo_codes').update({
+          times_used: promo.times_used + 1,
+        }).eq('id', promoId);
+
+        // Activate subscription
+        const periodEnd = getDurationEnd(promo.plan_duration);
+        await adminSupabase.from('user_subscriptions').upsert({
+          user_id: user.id,
+          plan: 'pro',
+          status: 'active',
+          plan_duration: promo.plan_duration,
+          current_period_start: new Date().toISOString(),
+          current_period_end: periodEnd.toISOString(),
+        }, { onConflict: 'user_id' });
+
+        return new Response(JSON.stringify({ success: true, plan_duration: promo.plan_duration }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
