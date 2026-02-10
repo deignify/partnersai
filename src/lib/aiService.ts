@@ -106,7 +106,6 @@ export async function streamPartnerReply(opts: StreamChatOptions) {
     }
   }
 
-  // Final flush
   if (textBuffer.trim()) {
     for (let raw of textBuffer.split('\n')) {
       if (!raw) continue;
@@ -124,4 +123,29 @@ export async function streamPartnerReply(opts: StreamChatOptions) {
   }
 
   opts.onDone();
+}
+
+export async function fetchReplySuggestions(
+  lastMessage: string,
+  memorySummary: string,
+  partnerStyle: string,
+  meName: string,
+  otherName: string
+): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke('chat-suggest', {
+      body: {
+        action: 'suggest-replies',
+        lastMessage,
+        memorySummary,
+        partnerStyle,
+        meName,
+        otherName,
+      },
+    });
+    if (error) return [];
+    return (data as { replies: string[] })?.replies || [];
+  } catch {
+    return [];
+  }
 }

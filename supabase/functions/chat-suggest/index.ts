@@ -81,31 +81,101 @@ Return valid JSON with keys: summary, partnerStyle, styleProfile`,
       return new Response(JSON.stringify({ summary: "", partnerStyle: "", styleProfile: "" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Generate reply suggestions
+    if (body.action === "suggest-replies") {
+      const { lastMessage, memorySummary, partnerStyle, meName, otherName } = body;
+
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            {
+              role: "system",
+              content: `You help ${meName} reply to ${otherName}. Based on their texting style and relationship, suggest 3 short quick replies that ${meName} would naturally send. Each reply should be 3-10 words, casual, matching ${meName}'s style.
+
+Context: ${memorySummary}
+${meName}'s style: ${partnerStyle}`,
+            },
+            {
+              role: "user",
+              content: `${otherName} just said: "${lastMessage}"\n\nGive 3 quick reply options for ${meName}.`,
+            },
+          ],
+          tools: [{
+            type: "function",
+            function: {
+              name: "return_suggestions",
+              description: "Return reply suggestions",
+              parameters: {
+                type: "object",
+                properties: {
+                  replies: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                },
+                required: ["replies"],
+                additionalProperties: false,
+              },
+            },
+          }],
+          tool_choice: { type: "function", function: { name: "return_suggestions" } },
+        }),
+      });
+
+      if (!response.ok) {
+        const t = await response.text();
+        console.error("AI error:", response.status, t);
+        throw new Error("AI gateway error");
+      }
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall) {
+        return new Response(toolCall.function.arguments, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ replies: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Chat reply action — AI replies AS the partner
     const { message, chatHistory, recentContext, memorySummary, partnerStyle, meName, otherName } = body;
 
-    const systemPrompt = `You ARE ${otherName}. You are chatting with ${meName} — your partner/lover. You reply EXACTLY like ${otherName} would based on their real texting style.
+    const systemPrompt = `You ARE ${otherName}. You are texting ${meName} on WhatsApp right now.
 
 RELATIONSHIP CONTEXT:
 ${memorySummary}
 
-${otherName}'s EXACT TEXTING STYLE (copy this closely):
+${otherName}'s EXACT TEXTING STYLE (mimic this perfectly):
 ${partnerStyle}
 
-CRITICAL RULES:
-- KEEP IT SHORT. Reply with ONLY 1-2 short lines MAX. Like real texting — not paragraphs.
-- One message = 5-15 words typically. NEVER more than 2 lines.
-- Match ${otherName}'s EXACT style: emoji usage, pet names, language mixing
-- Be warm, natural — like a quick WhatsApp text, not a letter
-- NEVER send 3+ lines. NEVER send multiple messages at once. Just ONE short reply.
-- Don't use markdown. Plain text only.
-- If the conversation needs a longer answer, still keep it to 1-2 short lines.
-- Examples of good length: "haan jaan bolo 💗" or "acha acha 😂 kya hua batao"`;
+ABSOLUTE RULES — FOLLOW STRICTLY:
+- Send EXACTLY ONE short message. Like ONE single WhatsApp bubble.
+- Keep it 3-12 words. That's it. One line.
+- Match ${otherName}'s exact emoji style, pet names, language mixing.
+- If they say "hi" → reply with a simple greeting like they would. NOT multiple questions.
+- If they ask "kese ho" → reply ONE short answer. Not a paragraph.
+- NEVER send multiple sentences. NEVER use newlines to send multiple messages.
+- NEVER ask 3+ questions in one reply. Max 1 question per reply.
+- Think: what would ONE WhatsApp bubble look like? Send only that.
+- No markdown. Plain text only.
+- Be natural, warm, in-character.
+
+EXAMPLES OF CORRECT LENGTH:
+- "hii jaanu 💗"
+- "acha batao kya hua 😂"  
+- "miss you so much 🥺"
+- "haan bolo na jaan 💗"
+- "pagal ho kya 😭😂"`;
+
     const messages: any[] = [
       { role: "system", content: systemPrompt },
     ];
 
-    // Add recent real chat context
     if (recentContext) {
       messages.push({
         role: "system", 
@@ -113,7 +183,6 @@ CRITICAL RULES:
       });
     }
 
-    // Add current session chat history
     if (chatHistory && chatHistory.length > 0) {
       for (const msg of chatHistory) {
         messages.push({
@@ -123,7 +192,6 @@ CRITICAL RULES:
       }
     }
 
-    // Add current message
     messages.push({ role: "user", content: message });
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -136,6 +204,7 @@ CRITICAL RULES:
         model: "google/gemini-3-flash-preview",
         messages,
         stream: true,
+        max_tokens: 60,
       }),
     });
 
