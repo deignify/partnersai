@@ -8,13 +8,14 @@ import { buildMemoryAndStyle } from '@/lib/aiService';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { MessageCircleHeart } from 'lucide-react';
 
-type Screen = 'landing' | 'mapping' | 'loading' | 'chat';
+type Screen = 'checking' | 'landing' | 'mapping' | 'loading' | 'chat';
 
 const ChatPage = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [screen, setScreen] = useState<Screen>('landing');
+  const [screen, setScreen] = useState<Screen>('checking');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [meName, setMeName] = useState('');
   const [otherName, setOtherName] = useState('');
@@ -39,7 +40,7 @@ const ChatPage = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (session) {
+      if (session && session.memory_summary && session.partner_style) {
         setSessionId(session.id);
         setMeName(session.me_name);
         setOtherName(session.partner_name);
@@ -63,7 +64,6 @@ const ChatPage = () => {
           .maybeSingle();
 
         if (imported?.recent_context) {
-          // Parse it back into importedMessages format for context
           const lines = imported.recent_context.split('\n');
           setImportedMessages(lines.map((l, i) => {
             const colonIdx = l.indexOf(': ');
@@ -74,6 +74,9 @@ const ChatPage = () => {
         }
 
         setScreen('chat');
+      } else {
+        // No existing session — show upload
+        setScreen('landing');
       }
     };
     loadSession();
@@ -96,7 +99,6 @@ const ChatPage = () => {
       setMemorySummary(result.summary);
       setPartnerStyle(result.partnerStyle);
 
-      // Save session to DB
       const { data: session, error } = await supabase
         .from('chat_sessions')
         .upsert({
@@ -113,7 +115,6 @@ const ChatPage = () => {
       if (error) throw error;
       setSessionId(session.id);
 
-      // Save recent context
       const recentContext = parseResult!.messages.slice(-40).map(m => {
         const role = m.sender === me ? me : other;
         return `${role}: ${m.text}`;
@@ -130,7 +131,6 @@ const ChatPage = () => {
       setMemorySummary('A conversation between two partners.');
       setPartnerStyle('Casual, loving texting style with emojis.');
 
-      // Still create a session
       const { data: session } = await supabase
         .from('chat_sessions')
         .upsert({
@@ -147,6 +147,18 @@ const ChatPage = () => {
     }
     setScreen('chat');
   }, [parseResult, user, toast]);
+
+  // Loading / checking state
+  if (screen === 'checking' || authLoading || !user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+        <div className="w-12 h-12 rounded-2xl gradient-primary glow-primary flex items-center justify-center animate-pulse">
+          <MessageCircleHeart className="w-6 h-6 text-primary-foreground" />
+        </div>
+        <p className="text-sm text-muted-foreground animate-pulse">Loading your chat...</p>
+      </div>
+    );
+  }
 
   if (screen === 'mapping' && parseResult) {
     return <ParticipantMapping parseResult={parseResult} onMapped={handleMapped} />;
@@ -178,8 +190,6 @@ const ChatPage = () => {
       />
     );
   }
-
-  if (authLoading || !user) return null;
 
   return <LandingPage onParsed={handleParsed} />;
 };
