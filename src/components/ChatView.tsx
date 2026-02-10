@@ -37,9 +37,30 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const [loading, setLoading] = useState(false);
   const [typing, setTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Track visual viewport to handle mobile keyboard
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onResize = () => {
+      setViewportHeight(vv.height);
+      // Scroll to keep composer visible
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
+    };
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,7 +73,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     }).join('\n');
   }, [importedMessages, meName, otherName]);
 
-  // Fetch suggestions after AI reply
   const loadSuggestions = useCallback(async (lastAiMessage: string) => {
     const replies = await fetchReplySuggestions(lastAiMessage, memorySummary, partnerStyle, meName, otherName);
     setSuggestions(replies.slice(0, 3));
@@ -85,7 +105,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
       content: m.content,
     }));
 
-    // Realistic typing delay before showing response
     await new Promise(r => setTimeout(r, randomDelay()));
 
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: new Date() }]);
@@ -139,9 +158,13 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const initial = otherName.charAt(0).toUpperCase();
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-background max-w-lg mx-auto">
+    <div
+      ref={containerRef}
+      className="fixed inset-x-0 top-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden"
+      style={{ height: `${viewportHeight}px` }}
+    >
       {/* WhatsApp-style Header */}
-      <div className="flex items-center gap-2 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-card border-b border-border/30 shrink-0">
+      <div className="flex items-center gap-2 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] bg-card border-b border-border/30 shrink-0 z-10">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -175,7 +198,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                             radial-gradient(circle at 80% 20%, hsl(var(--accent) / 0.03) 0%, transparent 50%)`,
         }}
       >
-        {/* Empty state */}
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
             <div className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
@@ -216,7 +238,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                         : 'bg-chat-ai text-chat-ai-foreground rounded-xl rounded-bl-sm border border-border/15'
                       }`}
                   >
-                    {/* Partner name label */}
                     {!isMe && (i === 0 || messages[i-1]?.role === 'user') && (
                       <p className="text-[11px] font-semibold text-primary mb-0.5">{otherName}</p>
                     )}
@@ -236,7 +257,6 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
           })}
         </AnimatePresence>
 
-        {/* Typing indicator */}
         {typing && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
@@ -271,8 +291,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </div>
       )}
 
-      {/* Composer */}
-      <div className="px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-chat-composer border-t border-border/20 shrink-0">
+      {/* Composer - always visible */}
+      <div className="px-3 py-2 bg-chat-composer border-t border-border/20 shrink-0">
         <div className="flex items-end gap-2.5">
           <div className="flex-1 min-w-0 bg-secondary/40 rounded-3xl px-4 py-2.5 border border-border/20 focus-within:border-primary/30 transition-colors">
             <textarea
