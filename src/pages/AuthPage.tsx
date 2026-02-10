@@ -33,7 +33,7 @@ const AuthPage = () => {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate('/');
+        navigate('/chat');
       }
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });

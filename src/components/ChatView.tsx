@@ -7,6 +7,7 @@ import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
 interface ChatViewProps {
@@ -94,6 +95,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+  const chatNavigate = useNavigate();
   const { canSendMessage, messagesUsedToday, maxMessages, plan, incrementUsage } = useSubscription();
   const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
 
@@ -382,7 +384,12 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
             {messagesUsedToday}/{maxMessages} messages today
           </p>
           {!canSendMessage && (
-            <p className="text-[10px] text-primary font-medium">Upgrade for unlimited →</p>
+            <button
+              onClick={() => chatNavigate('/#pricing')}
+              className="text-[10px] text-primary font-medium hover:underline active:scale-95 transition-transform"
+            >
+              Upgrade for unlimited →
+            </button>
           )}
         </div>
       )}

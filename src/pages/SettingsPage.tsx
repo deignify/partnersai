@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
+import { supabase as supabaseClient } from '@/integrations/supabase/client';
 
 const SettingsPage = () => {
   const { user, signOut, loading: authLoading } = useAuth();
@@ -110,7 +111,7 @@ const SettingsPage = () => {
                 </p>
               </div>
               {plan === 'free' && (
-                <Button size="sm" onClick={() => navigate('/')} className="h-7 text-[11px] gradient-primary border-0">
+                <Button size="sm" onClick={() => navigate('/#pricing')} className="h-7 text-[11px] gradient-primary border-0">
                   Upgrade
                 </Button>
               )}
