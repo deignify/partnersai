@@ -5,7 +5,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { motion } from 'framer-motion';
 import {
   MessageCircleHeart, Heart, Sparkles, Shield, ArrowRight, Settings,
-  Clock, Brain, Zap, Lock, ChevronDown, Mail, Check, Star, Loader2, Crown,
+  Clock, Brain, Zap, Lock, ChevronDown, Mail, Check, Star, Loader2, Crown, Ticket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,9 @@ const Index = () => {
   const { toast } = useToast();
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [currency, setCurrency] = useState<'INR' | 'USD'>('INR');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoResult, setPromoResult] = useState<{ valid: boolean; discount_type?: string; discount_value?: number; plan_duration?: string; promo_id?: string; error?: string } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
   const aboutRef = useRef<HTMLElement>(null);
   const pricingRef = useRef<HTMLElement>(null);
   const faqRef = useRef<HTMLElement>(null);
@@ -81,6 +84,55 @@ const Index = () => {
       rzp.open();
     } catch (e: any) {
       toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
+    }
+    setPaymentLoading(false);
+  };
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) return;
+    if (!user) { navigate('/auth'); return; }
+    setPromoLoading(true);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=validate-promo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ code: promoCode }),
+      });
+      const result = await res.json();
+      setPromoResult(result);
+      if (result.valid) {
+        toast({ title: '🎉 Promo applied!', description: `${result.discount_type === 'percentage' ? `${result.discount_value}% off` : `₹${result.discount_value} off`} — Pro for ${result.plan_duration}` });
+      } else {
+        toast({ title: 'Invalid code', description: result.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Could not validate promo', variant: 'destructive' });
+    }
+    setPromoLoading(false);
+  };
+
+  const handleRedeemPromo = async () => {
+    if (!promoResult?.valid || !promoResult.promo_id || !user) return;
+    setPaymentLoading(true);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=redeem-promo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ promoId: promoResult.promo_id }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({ title: '🎉 Welcome to Pro!', description: `Unlocked for ${result.plan_duration}!` });
+        refreshUsage();
+        setPromoCode('');
+        setPromoResult(null);
+      } else {
+        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
     setPaymentLoading(false);
   };
@@ -320,19 +372,62 @@ const Index = () => {
                   </li>
                 ))}
               </ul>
-              <Button
-                className="w-full h-10 rounded-xl gradient-primary border-0 gap-2"
-                onClick={handleUpgrade}
-                disabled={paymentLoading || plan === 'pro'}
-              >
-                {plan === 'pro' ? (
-                  <><Crown className="w-4 h-4" /> Current Plan</>
-                ) : paymentLoading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                ) : (
-                  'Upgrade to Pro'
-                )}
-              </Button>
+
+              {/* Promo Code Input */}
+              {plan !== 'pro' && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={promoCode}
+                      onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
+                      placeholder="Promo code"
+                      className="flex-1 h-9 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs outline-none focus:border-primary/50 uppercase placeholder:normal-case"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs gap-1 shrink-0"
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoCode.trim()}
+                    >
+                      {promoLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ticket className="w-3 h-3" />}
+                      Apply
+                    </Button>
+                  </div>
+                  {promoResult?.valid && (
+                    <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 rounded-lg px-3 py-2 border border-primary/20">
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>{promoResult.discount_type === 'percentage' ? `${promoResult.discount_value}% off` : `₹${promoResult.discount_value} off`} • Pro for {promoResult.plan_duration}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Redeem promo or pay */}
+              {promoResult?.valid ? (
+                <Button
+                  className="w-full h-10 rounded-xl gradient-primary border-0 gap-2"
+                  onClick={handleRedeemPromo}
+                  disabled={paymentLoading}
+                >
+                  {paymentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
+                  Redeem & Activate Pro
+                </Button>
+              ) : (
+                <Button
+                  className="w-full h-10 rounded-xl gradient-primary border-0 gap-2"
+                  onClick={handleUpgrade}
+                  disabled={paymentLoading || plan === 'pro'}
+                >
+                  {plan === 'pro' ? (
+                    <><Crown className="w-4 h-4" /> Current Plan</>
+                  ) : paymentLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                  ) : (
+                    'Upgrade to Pro'
+                  )}
+                </Button>
+              )}
             </motion.div>
           </div>
         </div>

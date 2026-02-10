@@ -141,6 +141,83 @@ export type Database = {
           },
         ]
       }
+      promo_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          plan_duration: string
+          times_used: number
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_duration?: string
+          times_used?: number
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_duration?: string
+          times_used?: number
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
+      promo_redemptions: {
+        Row: {
+          created_at: string
+          id: string
+          promo_code_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          promo_code_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          promo_code_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_redemptions_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -166,6 +243,7 @@ export type Database = {
           current_period_start: string | null
           id: string
           plan: string
+          plan_duration: string | null
           razorpay_payment_id: string | null
           razorpay_subscription_id: string | null
           status: string
@@ -178,6 +256,7 @@ export type Database = {
           current_period_start?: string | null
           id?: string
           plan?: string
+          plan_duration?: string | null
           razorpay_payment_id?: string | null
           razorpay_subscription_id?: string | null
           status?: string
@@ -190,6 +269,7 @@ export type Database = {
           current_period_start?: string | null
           id?: string
           plan?: string
+          plan_duration?: string | null
           razorpay_payment_id?: string | null
           razorpay_subscription_id?: string | null
           status?: string
