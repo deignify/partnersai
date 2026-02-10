@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Phone, Video, MoreVertical } from 'lucide-react';
+import { Send, ArrowLeft, Phone, Video, MoreVertical, Sun, Moon, Sunset, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
@@ -68,6 +68,13 @@ function useVisualViewport() {
 }
 
 const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, existingMessages, onBack }: ChatViewProps) => {
+  const timeGreeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return { text: 'Good morning', emoji: '☀️', icon: Sun, sub: 'Start your day with a sweet text' };
+    if (h >= 12 && h < 17) return { text: 'Good afternoon', emoji: '🌤️', icon: Cloud, sub: 'How about a quick chat?' };
+    if (h >= 17 && h < 21) return { text: 'Good evening', emoji: '🌅', icon: Sunset, sub: 'Wind down with a cozy conversation' };
+    return { text: 'Late night', emoji: '🌙', icon: Moon, sub: 'Can\'t sleep? Talk to them 💕' };
+  }, []);
   const [messages, setMessages] = useState<ChatMsg[]>(() => {
     if (existingMessages && existingMessages.length > 0) {
       return existingMessages.map((m, i) => ({
@@ -253,14 +260,24 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         }}
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
-            <div className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 200 }}
+              className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-lg"
+            >
               {initial}
+            </motion.div>
+            <div className="space-y-1">
+              <p className="text-lg font-semibold">
+                {timeGreeting.text} {timeGreeting.emoji}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Say something to <span className="text-primary font-semibold">{otherName}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground/50">{timeGreeting.sub}</p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Say something to <span className="text-primary font-semibold">{otherName}</span> 💕
-            </p>
-            <p className="text-[11px] text-muted-foreground/60">They'll text back just like the real thing</p>
           </div>
         )}
 

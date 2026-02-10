@@ -40,6 +40,7 @@ export interface StreamChatOptions {
   partnerStyle: string;
   meName: string;
   otherName: string;
+  timezone?: string;
   onDelta: (text: string) => void;
   onDone: () => void;
 }
@@ -61,6 +62,7 @@ export async function streamPartnerReply(opts: StreamChatOptions) {
       partnerStyle: opts.partnerStyle,
       meName: opts.meName,
       otherName: opts.otherName,
+      timezone: opts.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     }),
   });
 
