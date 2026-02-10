@@ -3,9 +3,11 @@ import LandingPage from '@/components/LandingPage';
 import ParticipantMapping from '@/components/ParticipantMapping';
 import ChatView from '@/components/ChatView';
 import type { ParseResult, ParsedMessage } from '@/lib/chatParser';
-import { saveSession, saveMessages } from '@/lib/storage';
+import { saveSession, saveMessages, updateSessionSummary } from '@/lib/storage';
+import { buildMemoryAndStyle } from '@/lib/aiService';
+import { useToast } from '@/hooks/use-toast';
 
-type Screen = 'landing' | 'mapping' | 'chat';
+type Screen = 'landing' | 'mapping' | 'loading' | 'chat';
 
 const Index = () => {
   const [screen, setScreen] = useState<Screen>('landing');
@@ -14,6 +16,9 @@ const Index = () => {
   const [meName, setMeName] = useState('');
   const [otherName, setOtherName] = useState('');
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
+  const [memorySummary, setMemorySummary] = useState('');
+  const [styleProfile, setStyleProfile] = useState('');
+  const { toast } = useToast();
 
   const handleParsed = useCallback((result: ParseResult) => {
     setParseResult(result);
@@ -26,6 +31,7 @@ const Index = () => {
     setMeName(me);
     setOtherName(other);
     setMessages(parseResult!.messages);
+    setScreen('loading');
 
     await saveSession({
       id,
@@ -35,20 +41,46 @@ const Index = () => {
       otherParticipant: other,
     });
     await saveMessages(id, parseResult!.messages);
+
+    // Build memory in background
+    try {
+      const { summary, styleProfile: sp } = await buildMemoryAndStyle(parseResult!.messages, me, other);
+      setMemorySummary(summary);
+      setStyleProfile(sp);
+      await updateSessionSummary(id, summary, sp);
+    } catch (e: any) {
+      toast({ title: 'Memory warning', description: 'Using basic context. AI may be less accurate.' });
+      setMemorySummary('General conversation between two people.');
+      setStyleProfile('Default conversational style.');
+    }
     setScreen('chat');
-  }, [parseResult]);
+  }, [parseResult, toast]);
 
   if (screen === 'mapping' && parseResult) {
     return <ParticipantMapping parseResult={parseResult} onMapped={handleMapped} />;
+  }
+
+  if (screen === 'loading') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4">
+        <div className="w-12 h-12 rounded-2xl gradient-primary glow-primary flex items-center justify-center animate-pulse">
+          <span className="text-2xl">🧠</span>
+        </div>
+        <p className="text-sm text-muted-foreground animate-pulse">Learning your vibe...</p>
+        <p className="text-xs text-muted-foreground/50">Reading through your messages to understand your style</p>
+      </div>
+    );
   }
 
   if (screen === 'chat' && sessionId) {
     return (
       <ChatView
         sessionId={sessionId}
-        messages={messages}
+        importedMessages={messages}
         meName={meName}
         otherName={otherName}
+        memorySummary={memorySummary}
+        styleProfile={styleProfile}
         onBack={() => setScreen('landing')}
       />
     );
