@@ -28,12 +28,11 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
-    const { plan } = await req.json();
+    const { plan, currency: reqCurrency } = await req.json();
     if (plan !== 'pro') throw new Error('Invalid plan');
 
-    // Amount in paise (₹9 = 900 paise, or $9 = 900 cents)
-    const amount = 900;
-    const currency = 'USD';
+    const currency = reqCurrency === 'USD' ? 'USD' : 'INR';
+    const amount = currency === 'INR' ? 49900 : 900; // ₹499 or $9
 
     const credentials = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
     const orderRes = await fetch('https://api.razorpay.com/v1/orders', {

@@ -22,6 +22,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [currency, setCurrency] = useState<'INR' | 'USD'>('INR');
   const aboutRef = useRef<HTMLElement>(null);
   const pricingRef = useRef<HTMLElement>(null);
   const faqRef = useRef<HTMLElement>(null);
@@ -30,6 +31,8 @@ const Index = () => {
   const scrollTo = (ref: React.RefObject<HTMLElement | null>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const priceDisplay = currency === 'INR' ? { symbol: '₹', amount: '499', paise: 49900 } : { symbol: '$', amount: '9', paise: 900 };
 
   const handleUpgrade = async () => {
     if (!user) { navigate('/auth'); return; }
@@ -40,7 +43,7 @@ const Index = () => {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/razorpay-create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ plan: 'pro' }),
+        body: JSON.stringify({ plan: 'pro', currency }),
       });
       const order = await res.json();
       if (order.error) throw new Error(order.error);
@@ -110,6 +113,21 @@ const Index = () => {
             <button onClick={() => scrollTo(contactRef)} className="hover:text-foreground transition-colors">Contact</button>
           </div>
           <div className="flex items-center gap-2">
+            {/* Currency Toggle */}
+            <div className="flex items-center bg-secondary/40 rounded-full p-0.5 border border-border/30">
+              <button
+                onClick={() => setCurrency('INR')}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${currency === 'INR' ? 'gradient-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                ₹ INR
+              </button>
+              <button
+                onClick={() => setCurrency('USD')}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${currency === 'USD' ? 'gradient-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                $ USD
+              </button>
+            </div>
             {user ? (
               <>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/settings')} className="h-8 text-xs">
@@ -240,11 +258,28 @@ const Index = () => {
       </section>
 
       {/* ─── Pricing ─── */}
-      <section ref={pricingRef} className="py-20 px-4 bg-card/20">
+      <section ref={pricingRef} id="pricing" className="py-20 px-4 bg-card/20">
         <div className="max-w-4xl mx-auto space-y-10">
           <div className="text-center space-y-3">
             <h2 className="text-3xl sm:text-4xl font-bold">Simple <span className="gradient-text">Pricing</span></h2>
             <p className="text-muted-foreground text-sm">Start free, upgrade when you need more.</p>
+            {/* Currency toggle in pricing */}
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <div className="flex items-center bg-secondary/40 rounded-full p-0.5 border border-border/30">
+                <button
+                  onClick={() => setCurrency('INR')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${currency === 'INR' ? 'gradient-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  ₹ INR
+                </button>
+                <button
+                  onClick={() => setCurrency('USD')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${currency === 'USD' ? 'gradient-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  $ USD
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
@@ -253,7 +288,7 @@ const Index = () => {
               className="p-6 rounded-2xl bg-card border border-border/30 space-y-5">
               <div>
                 <p className="text-sm font-bold">Free</p>
-                <p className="text-3xl font-bold mt-1">$0</p>
+                <p className="text-3xl font-bold mt-1">{priceDisplay.symbol}0</p>
                 <p className="text-xs text-muted-foreground">Forever free</p>
               </div>
               <ul className="space-y-2">
@@ -275,7 +310,7 @@ const Index = () => {
               <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">POPULAR</div>
               <div>
                 <p className="text-sm font-bold">Pro</p>
-                <p className="text-3xl font-bold mt-1">$9<span className="text-base font-normal text-muted-foreground">/mo</span></p>
+                <p className="text-3xl font-bold mt-1">{priceDisplay.symbol}{priceDisplay.amount}<span className="text-base font-normal text-muted-foreground">/mo</span></p>
                 <p className="text-xs text-muted-foreground">Unlimited everything</p>
               </div>
               <ul className="space-y-2">
