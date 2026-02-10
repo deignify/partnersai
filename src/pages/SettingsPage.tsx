@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield } from 'lucide-react';
+import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useSubscription } from '@/hooks/useSubscription';
 
 const SettingsPage = () => {
   const { user, signOut, loading: authLoading } = useAuth();
@@ -13,6 +14,7 @@ const SettingsPage = () => {
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; messageCount: number; createdAt: string } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { plan, messagesUsedToday, maxMessages } = useSubscription();
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -89,6 +91,29 @@ const SettingsPage = () => {
                 <p className="text-sm font-medium truncate">{user?.email}</p>
                 <p className="text-[11px] text-muted-foreground">Signed in via {user?.app_metadata?.provider === 'google' ? 'Google' : 'Email'}</p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Subscription Section */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Subscription</p>
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
+            <div className="p-4 flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${plan === 'pro' ? 'gradient-primary' : 'bg-secondary/60'}`}>
+                <Crown className={`w-5 h-5 ${plan === 'pro' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">{plan === 'pro' ? 'Pro Plan' : 'Free Plan'}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {plan === 'pro' ? 'Unlimited messages' : `${messagesUsedToday}/${maxMessages} messages used today`}
+                </p>
+              </div>
+              {plan === 'free' && (
+                <Button size="sm" onClick={() => navigate('/')} className="h-7 text-[11px] gradient-primary border-0">
+                  Upgrade
+                </Button>
+              )}
             </div>
           </div>
         </section>

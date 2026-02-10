@@ -1,12 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { motion } from 'framer-motion';
 import {
   MessageCircleHeart, Heart, Sparkles, Shield, ArrowRight, Settings,
-  Clock, Brain, Zap, Lock, ChevronDown, Mail, Check, Star,
+  Clock, Brain, Zap, Lock, ChevronDown, Mail, Check, Star, Loader2, Crown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -15,7 +18,10 @@ const fadeUp = {
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const { plan, refreshUsage } = useSubscription();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const aboutRef = useRef<HTMLElement>(null);
   const pricingRef = useRef<HTMLElement>(null);
   const faqRef = useRef<HTMLElement>(null);
@@ -23,6 +29,57 @@ const Index = () => {
 
   const scrollTo = (ref: React.RefObject<HTMLElement | null>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleUpgrade = async () => {
+    if (!user) { navigate('/auth'); return; }
+    setPaymentLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/razorpay-create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ plan: 'pro' }),
+      });
+      const order = await res.json();
+      if (order.error) throw new Error(order.error);
+
+      const options = {
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'PartnerAI',
+        description: 'Pro Plan - Monthly',
+        order_id: order.order_id,
+        handler: async (response: any) => {
+          const verifyRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/razorpay-verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+          const result = await verifyRes.json();
+          if (result.success) {
+            toast({ title: '🎉 Welcome to Pro!', description: 'Unlimited messages unlocked!' });
+            refreshUsage();
+          } else {
+            toast({ title: 'Verification failed', description: result.error, variant: 'destructive' });
+          }
+        },
+        prefill: { email: user.email },
+        theme: { color: '#7c3aed' },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (e: any) {
+      toast({ title: 'Payment error', description: e.message, variant: 'destructive' });
+    }
+    setPaymentLoading(false);
   };
 
   if (loading) {
@@ -200,7 +257,7 @@ const Index = () => {
                 <p className="text-xs text-muted-foreground">Forever free</p>
               </div>
               <ul className="space-y-2">
-                {['Upload 1 chat export', '50 AI messages/day', 'Time-aware replies', 'Emotion detection', 'Reply suggestions'].map(f => (
+                {['Upload 1 chat export', '10 AI messages/day', 'Time-aware replies', 'Emotion detection', 'Reply suggestions'].map(f => (
                   <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Check className="w-3.5 h-3.5 text-primary shrink-0" /> {f}
                   </li>
@@ -228,8 +285,18 @@ const Index = () => {
                   </li>
                 ))}
               </ul>
-              <Button className="w-full h-10 rounded-xl gradient-primary border-0">
-                Coming Soon
+              <Button
+                className="w-full h-10 rounded-xl gradient-primary border-0 gap-2"
+                onClick={handleUpgrade}
+                disabled={paymentLoading || plan === 'pro'}
+              >
+                {plan === 'pro' ? (
+                  <><Crown className="w-4 h-4" /> Current Plan</>
+                ) : paymentLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                ) : (
+                  'Upgrade to Pro'
+                )}
               </Button>
             </motion.div>
           </div>
