@@ -385,7 +385,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
           </p>
           {!canSendMessage && (
             <button
-              onClick={() => chatNavigate('/#pricing')}
+              onClick={() => chatNavigate('/settings')}
               className="text-[10px] text-primary font-medium hover:underline active:scale-95 transition-transform"
             >
               Upgrade for unlimited →
