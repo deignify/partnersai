@@ -28,10 +28,10 @@ export function useSubscription(): SubscriptionState {
 
     // Get subscription
     const { data: sub } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_safe' as any)
       .select('plan, status, current_period_end')
       .eq('user_id', user.id)
-      .maybeSingle();
+      .maybeSingle() as { data: { plan: string; status: string; current_period_end: string | null } | null };
 
     if (sub && sub.plan === 'pro' && sub.status === 'active') {
       // Check if still within period
