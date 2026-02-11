@@ -112,24 +112,76 @@ const Index = () => {
     setPromoLoading(false);
   };
 
+  const isFreePromo = promoResult?.valid && (
+    (promoResult.discount_type === 'percentage' && (promoResult.discount_value ?? 0) >= 100) ||
+    (promoResult.discount_type === 'fixed' && (promoResult.discount_value ?? 0) >= 499)
+  );
+
   const handleRedeemPromo = async () => {
     if (!promoResult?.valid || !promoResult.promo_id || !user) return;
     setPaymentLoading(true);
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=redeem-promo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ promoId: promoResult.promo_id }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        toast({ title: '🎉 Welcome to Pro!', description: `Unlocked for ${result.plan_duration}!` });
-        refreshUsage();
-        setPromoCode('');
-        setPromoResult(null);
+
+      if (isFreePromo) {
+        // 100% discount — redeem directly
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=redeem-promo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ promoId: promoResult.promo_id }),
+        });
+        const result = await res.json();
+        if (result.success) {
+          toast({ title: '🎉 Welcome to Pro!', description: `Unlocked for ${result.plan_duration}!` });
+          refreshUsage();
+          setPromoCode('');
+          setPromoResult(null);
+        } else {
+          toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        }
       } else {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        // Partial discount — go through Razorpay with discounted price
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/razorpay-create-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ plan: 'pro', currency, promoId: promoResult.promo_id }),
+        });
+        const order = await res.json();
+        if (order.error) throw new Error(order.error);
+
+        const options = {
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          name: 'PartnerAI',
+          description: `Pro Plan — ${promoResult.discount_type === 'percentage' ? `${promoResult.discount_value}% off` : `₹${promoResult.discount_value} off`}`,
+          order_id: order.order_id,
+          handler: async (response: any) => {
+            const verifyRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/razorpay-verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const result = await verifyRes.json();
+            if (result.success) {
+              toast({ title: '🎉 Welcome to Pro!', description: 'Unlimited messages unlocked!' });
+              refreshUsage();
+              setPromoCode('');
+              setPromoResult(null);
+            } else {
+              toast({ title: 'Verification failed', description: result.error, variant: 'destructive' });
+            }
+          },
+          prefill: { email: user.email },
+          theme: { color: '#7c3aed' },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
       }
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -410,8 +462,8 @@ const Index = () => {
                   onClick={handleRedeemPromo}
                   disabled={paymentLoading}
                 >
-                  {paymentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
-                  Redeem & Activate Pro
+                  {paymentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : isFreePromo ? <Ticket className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
+                  {isFreePromo ? 'Redeem & Activate Pro' : 'Pay Discounted Price'}
                 </Button>
               ) : (
                 <Button
