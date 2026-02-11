@@ -28,11 +28,34 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
-    const { plan, currency: reqCurrency } = await req.json();
+    const { plan, currency: reqCurrency, promoId } = await req.json();
     if (plan !== 'pro') throw new Error('Invalid plan');
 
     const currency = reqCurrency === 'USD' ? 'USD' : 'INR';
-    const amount = currency === 'INR' ? 49900 : 900; // ₹499 or $9
+    let amount = currency === 'INR' ? 49900 : 900; // ₹499 or $9
+
+    // Apply promo discount if provided
+    if (promoId) {
+      const adminSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      );
+      const { data: promo } = await adminSupabase
+        .from('promo_codes')
+        .select('*')
+        .eq('id', promoId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (promo) {
+        if (promo.discount_type === 'percentage') {
+          amount = Math.round(amount * (1 - promo.discount_value / 100));
+        } else if (promo.discount_type === 'fixed') {
+          const fixedPaise = currency === 'INR' ? promo.discount_value * 100 : promo.discount_value * 100;
+          amount = Math.max(100, amount - fixedPaise); // Razorpay min ₹1
+        }
+      }
+    }
 
     const credentials = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
     const orderRes = await fetch('https://api.razorpay.com/v1/orders', {

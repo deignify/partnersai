@@ -266,7 +266,7 @@ serve(async (req) => {
         });
       }
 
-      // Redeem promo code
+      // Redeem promo code (only 100% discount codes can be redeemed directly)
       if (action === 'redeem-promo') {
         const { promoId } = body;
         const { data: promo } = await adminSupabase
@@ -277,6 +277,15 @@ serve(async (req) => {
           .maybeSingle();
 
         if (!promo) throw new Error('Invalid promo code');
+
+        // Only allow direct redemption for 100% off or full-amount fixed discounts
+        const baseAmountINR = 499;
+        const isFreePromo = (promo.discount_type === 'percentage' && promo.discount_value >= 100) ||
+          (promo.discount_type === 'fixed' && promo.discount_value >= baseAmountINR);
+
+        if (!isFreePromo) {
+          throw new Error('This promo code gives a discount. Please proceed with payment.');
+        }
 
         // Record redemption
         await adminSupabase.from('promo_redemptions').insert({
