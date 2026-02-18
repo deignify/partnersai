@@ -189,6 +189,12 @@ const Index = () => {
     setPaymentLoading(false);
   };
 
+  // Redirect authenticated users straight to the chat dashboard
+  if (!loading && user) {
+    navigate('/chat', { replace: true });
+    return null;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -214,7 +220,9 @@ const Index = () => {
             <button onClick={() => scrollTo(aboutRef)} className="hover:text-foreground transition-colors">About</button>
             <button onClick={() => scrollTo(pricingRef)} className="hover:text-foreground transition-colors">Pricing</button>
             <button onClick={() => scrollTo(faqRef)} className="hover:text-foreground transition-colors">FAQ</button>
-            <button onClick={() => scrollTo(contactRef)} className="hover:text-foreground transition-colors">Contact</button>
+            <button onClick={() => navigate('/privacy')} className="hover:text-foreground transition-colors">Privacy</button>
+            <button onClick={() => navigate('/terms')} className="hover:text-foreground transition-colors">Terms</button>
+            <button onClick={() => navigate('/contact')} className="hover:text-foreground transition-colors">Contact</button>
           </div>
           <div className="flex items-center gap-2">
             {/* Currency Toggle */}
@@ -553,11 +561,14 @@ const Index = () => {
               </div>
               <span className="text-xs font-bold">Partner<span className="gradient-text">AI</span></span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
               <button onClick={() => scrollTo(aboutRef)} className="hover:text-foreground transition-colors">About</button>
               <button onClick={() => scrollTo(pricingRef)} className="hover:text-foreground transition-colors">Pricing</button>
               <button onClick={() => scrollTo(faqRef)} className="hover:text-foreground transition-colors">FAQ</button>
-              <button onClick={() => scrollTo(contactRef)} className="hover:text-foreground transition-colors">Contact</button>
+              <button onClick={() => navigate('/privacy')} className="hover:text-foreground transition-colors">Privacy Policy</button>
+              <button onClick={() => navigate('/terms')} className="hover:text-foreground transition-colors">Terms</button>
+              <button onClick={() => navigate('/refund')} className="hover:text-foreground transition-colors">Refund</button>
+              <button onClick={() => navigate('/contact')} className="hover:text-foreground transition-colors">Contact</button>
             </div>
           </div>
           <div className="border-t border-border/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
