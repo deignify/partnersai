@@ -544,21 +544,31 @@ const Index = () => {
       </section>
 
       {/* ─── Footer ─── */}
-      <footer className="py-8 px-4 border-t border-border/10">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md gradient-primary flex items-center justify-center">
-              <MessageCircleHeart className="w-3 h-3 text-primary-foreground" />
+      <footer className="py-10 px-4 border-t border-border/10">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md gradient-primary flex items-center justify-center">
+                <MessageCircleHeart className="w-3 h-3 text-primary-foreground" />
+              </div>
+              <span className="text-xs font-bold">Partner<span className="gradient-text">AI</span></span>
             </div>
-            <span className="text-xs font-bold">Partner<span className="gradient-text">AI</span></span>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+              <button onClick={() => scrollTo(aboutRef)} className="hover:text-foreground transition-colors">About</button>
+              <button onClick={() => scrollTo(pricingRef)} className="hover:text-foreground transition-colors">Pricing</button>
+              <button onClick={() => scrollTo(faqRef)} className="hover:text-foreground transition-colors">FAQ</button>
+              <button onClick={() => scrollTo(contactRef)} className="hover:text-foreground transition-colors">Contact</button>
+            </div>
           </div>
-          <div className="flex items-center gap-6 text-xs text-muted-foreground">
-            <button onClick={() => scrollTo(aboutRef)} className="hover:text-foreground transition-colors">About</button>
-            <button onClick={() => scrollTo(pricingRef)} className="hover:text-foreground transition-colors">Pricing</button>
-            <button onClick={() => scrollTo(faqRef)} className="hover:text-foreground transition-colors">FAQ</button>
-            <button onClick={() => scrollTo(contactRef)} className="hover:text-foreground transition-colors">Contact</button>
+          <div className="border-t border-border/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground/40">© 2026 PartnerAI. All rights reserved.</p>
+            <div className="flex items-center gap-5 text-[11px] text-muted-foreground/60">
+              <button onClick={() => navigate('/privacy')} className="hover:text-primary transition-colors">Privacy Policy</button>
+              <button onClick={() => navigate('/terms')} className="hover:text-primary transition-colors">Terms of Service</button>
+              <button onClick={() => navigate('/refund')} className="hover:text-primary transition-colors">Refund Policy</button>
+              <button onClick={() => navigate('/contact')} className="hover:text-primary transition-colors">Contact</button>
+            </div>
           </div>
-          <p className="text-[11px] text-muted-foreground/40">© 2026 PartnerAI. All rights reserved.</p>
         </div>
       </footer>
     </div>
