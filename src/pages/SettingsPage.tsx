@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check } from 'lucide-react';
+import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,7 @@ const SettingsPage = () => {
   const [promoResult, setPromoResult] = useState<{ valid: boolean; discount_type?: string; discount_value?: number; plan_duration?: string; promo_id?: string; error?: string } | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const priceDisplay = currency === 'INR' ? { symbol: '₹', amount: '499' } : { symbol: '$', amount: '9' };
 
@@ -82,6 +83,20 @@ const SettingsPage = () => {
     navigate('/auth');
   };
 
+  const handleChangePassword = async () => {
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email!, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: 'Password reset link sent! 📧', description: `Check ${user.email} for the reset link.` });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+    setResetLoading(false);
+  };
+
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
     setPromoLoading(true);
@@ -110,7 +125,6 @@ const SettingsPage = () => {
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
 
-      // If free promo, redeem directly
       if (promoResult?.valid && isFreePromo) {
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api?action=redeem-promo`, {
           method: 'POST',
@@ -130,7 +144,6 @@ const SettingsPage = () => {
         return;
       }
 
-      // Razorpay payment (with optional discount)
       const body: any = { plan: 'pro', currency };
       if (promoResult?.valid && promoResult.promo_id) body.promoId = promoResult.promo_id;
 
@@ -185,8 +198,10 @@ const SettingsPage = () => {
     setPaymentLoading(false);
   };
 
+  const userInitial = (user.email?.charAt(0) || 'U').toUpperCase();
+
   return (
-    <div className="min-h-screen bg-background p-4 max-w-lg mx-auto pb-20">
+    <div className="min-h-[100dvh] bg-background p-4 max-w-lg mx-auto pb-20">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="icon" onClick={() => navigate('/chat')} className="-ml-2">
@@ -199,16 +214,36 @@ const SettingsPage = () => {
         {/* Account Section */}
         <section className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Account</p>
-          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
             <div className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center shrink-0">
-                <User className="w-5 h-5 text-primary-foreground" />
+              <div className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 text-lg font-bold text-primary-foreground shadow-md shadow-primary/20">
+                {userInitial}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{user?.email}</p>
-                <p className="text-[11px] text-muted-foreground">Signed in via {user?.app_metadata?.provider === 'google' ? 'Google' : 'Email'}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Signed in via {user?.app_metadata?.provider === 'google' ? 'Google' : 'Email'}
+                </p>
               </div>
             </div>
+
+            {/* Change password */}
+            <button
+              onClick={handleChangePassword}
+              disabled={resetLoading}
+              className="w-full p-3.5 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
+            >
+              {resetLoading ? (
+                <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+              ) : (
+                <KeyRound className="w-4 h-4 text-muted-foreground shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground">Change Password</p>
+                <p className="text-[10px] text-muted-foreground">Sends a reset link to your email</p>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+            </button>
           </div>
         </section>
 
@@ -217,21 +252,34 @@ const SettingsPage = () => {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Subscription</p>
           <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
             <div className="p-4 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${plan === 'pro' ? 'gradient-primary' : 'bg-secondary/60'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${plan === 'pro' ? 'gradient-primary shadow-md shadow-primary/20' : 'bg-secondary/60'}`}>
                 <Crown className={`w-5 h-5 ${plan === 'pro' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{plan === 'pro' ? 'Pro Plan' : 'Free Plan'}</p>
+                <p className="text-sm font-semibold">{plan === 'pro' ? 'Pro Plan ✨' : 'Free Plan'}</p>
                 <p className="text-[11px] text-muted-foreground">
                   {plan === 'pro' ? 'Unlimited messages' : `${messagesUsedToday}/${maxMessages} messages used today`}
                 </p>
               </div>
             </div>
 
+            {/* Usage bar for free */}
+            {plan === 'free' && (
+              <div className="px-4 pb-3">
+                <div className="h-1.5 rounded-full bg-secondary/60 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min((messagesUsedToday / maxMessages) * 100, 100)}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                    className="h-full rounded-full gradient-primary"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Upgrade UI inline */}
             {plan === 'free' && (
               <div className="border-t border-border/20 p-4 space-y-3">
-                {/* Currency toggle */}
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">Upgrade to Pro — {priceDisplay.symbol}{priceDisplay.amount}/mo</p>
                   <div className="flex items-center bg-secondary/40 rounded-full p-0.5 border border-border/30">
@@ -250,8 +298,7 @@ const SettingsPage = () => {
                   </div>
                 </div>
 
-                {/* Pro features */}
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {['Unlimited AI messages', 'Advanced emotion AI', 'Re-upload & refresh chat', 'Priority support'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <Check className="w-3 h-3 text-primary shrink-0" /> {f}
@@ -259,18 +306,17 @@ const SettingsPage = () => {
                   ))}
                 </ul>
 
-                {/* Promo code */}
                 <div className="flex gap-2">
                   <input
                     value={promoCode}
                     onChange={e => { setPromoCode(e.target.value); setPromoResult(null); }}
                     placeholder="Promo code"
-                    className="flex-1 h-8 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs outline-none focus:border-primary/50 uppercase placeholder:normal-case"
+                    className="flex-1 h-9 px-3 rounded-lg bg-secondary/40 border border-border/30 text-xs outline-none focus:border-primary/50 uppercase placeholder:normal-case"
                   />
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-[11px] gap-1 shrink-0"
+                    className="h-9 text-[11px] gap-1 shrink-0"
                     onClick={handleApplyPromo}
                     disabled={promoLoading || !promoCode.trim()}
                   >
@@ -286,9 +332,8 @@ const SettingsPage = () => {
                   </div>
                 )}
 
-                {/* Pay / Redeem button */}
                 <Button
-                  className="w-full h-9 rounded-xl gradient-primary border-0 gap-2 text-xs"
+                  className="w-full h-10 rounded-xl gradient-primary border-0 gap-2 text-xs font-semibold shadow-lg shadow-primary/20"
                   onClick={handleUpgrade}
                   disabled={paymentLoading}
                 >
@@ -307,10 +352,10 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        {/* Open Chat */}
+        {/* Quick Actions */}
         <section className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Quick Actions</p>
-          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
             <button
               onClick={() => navigate('/chat')}
               className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
@@ -318,11 +363,28 @@ const SettingsPage = () => {
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <MessageCircleHeart className="w-5 h-5 text-primary" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Open Chat</p>
                 <p className="text-[11px] text-muted-foreground">Continue chatting with your partner's AI twin</p>
               </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
             </button>
+
+            {partnerInfo && (
+              <button
+                onClick={() => navigate('/chat')}
+                className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <RefreshCw className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Re-upload Chat</p>
+                  <p className="text-[11px] text-muted-foreground">Update AI with newer conversations</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+              </button>
+            )}
           </div>
         </section>
 
@@ -332,8 +394,8 @@ const SettingsPage = () => {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Your Partner</p>
             <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
               <div className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Heart className="w-5 h-5 text-primary" />
+                <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-lg font-bold text-primary">
+                  {partnerInfo.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{partnerInfo.name}</p>
@@ -341,6 +403,7 @@ const SettingsPage = () => {
                     {partnerInfo.messageCount} messages • Since {partnerInfo.createdAt}
                   </p>
                 </div>
+                <Heart className="w-4 h-4 text-primary/50 shrink-0" />
               </div>
             </div>
           </section>
@@ -417,7 +480,7 @@ const SettingsPage = () => {
                 className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/30 transition-colors text-left"
               >
                 <span className="text-sm text-muted-foreground">{label}</span>
-                <ArrowLeft className="w-3.5 h-3.5 text-muted-foreground/40 rotate-180" />
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40" />
               </button>
             ))}
           </div>
