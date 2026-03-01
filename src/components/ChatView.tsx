@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Phone, Video, MoreVertical, Sun, Moon, Sunset, Cloud } from 'lucide-react';
+import { Send, ArrowLeft, Phone, Video, Settings, Sun, Moon, Sunset, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
@@ -264,8 +264,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
           <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
             <Phone className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
-            <MoreVertical className="w-5 h-5" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={onBack}>
+            <Settings className="w-5 h-5" />
           </Button>
         </div>
       </header>

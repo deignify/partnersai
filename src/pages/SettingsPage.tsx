@@ -189,7 +189,7 @@ const SettingsPage = () => {
     <div className="min-h-screen bg-background p-4 max-w-lg mx-auto pb-20">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="-ml-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/chat')} className="-ml-2">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-lg font-bold">Settings</h1>
@@ -398,6 +398,28 @@ const SettingsPage = () => {
                 <p className="text-[11px] text-muted-foreground">Log out of your account</p>
               </div>
             </button>
+          </div>
+        </section>
+
+        {/* Legal Links */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Legal</p>
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
+            {[
+              { label: 'Privacy Policy', path: '/privacy' },
+              { label: 'Terms of Service', path: '/terms' },
+              { label: 'Refund Policy', path: '/refund' },
+              { label: 'Contact Support', path: '/contact' },
+            ].map(({ label, path }) => (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/30 transition-colors text-left"
+              >
+                <span className="text-sm text-muted-foreground">{label}</span>
+                <ArrowLeft className="w-3.5 h-3.5 text-muted-foreground/40 rotate-180" />
+              </button>
+            ))}
           </div>
         </section>
 
