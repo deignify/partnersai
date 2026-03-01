@@ -186,7 +186,7 @@ const ChatPage = () => {
         memorySummary={memorySummary}
         partnerStyle={partnerStyle}
         existingMessages={existingMessages}
-        onBack={() => navigate('/')}
+        onBack={() => navigate('/settings')}
       />
     );
   }
