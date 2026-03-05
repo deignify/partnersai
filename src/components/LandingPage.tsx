@@ -4,7 +4,7 @@ import { Upload, Heart, Shield, Trash2, Sparkles, MessageCircleHeart } from 'luc
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { parseWhatsAppChat, type ParseResult } from '@/lib/chatParser';
-import { deleteAllData } from '@/lib/storage';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface LandingPageProps {
@@ -64,7 +64,12 @@ const LandingPage = ({ onParsed }: LandingPageProps) => {
   };
 
   const handleDeleteAll = async () => {
-    await deleteAllData();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('chat_messages').delete().eq('user_id', user.id);
+      await supabase.from('imported_chats').delete().eq('user_id', user.id);
+      await supabase.from('chat_sessions').delete().eq('user_id', user.id);
+    }
     toast({ title: 'All data deleted', description: 'Everything wiped clean. 💨' });
   };
 
@@ -163,7 +168,7 @@ const LandingPage = ({ onParsed }: LandingPageProps) => {
           />
           <label htmlFor="consent" className="text-xs text-muted-foreground cursor-pointer leading-relaxed">
             I own this chat export and have permission to use it. 
-            All data stays on my device — nothing is stored on any server.
+            Data is securely stored and encrypted — only you can access it.
           </label>
         </div>
 

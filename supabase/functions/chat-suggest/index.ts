@@ -142,7 +142,7 @@ Return valid JSON with keys: summary, partnerStyle, styleProfile`,
             content: `You help ${meName} reply to ${otherName}. Based on their texting style and relationship, suggest 3 short quick replies that ${meName} would naturally send. Each reply should be 3-10 words, casual, matching ${meName}'s style.
 
 Context: ${memorySummary}
-${meName}'s style: ${partnerStyle}`,
+${otherName}'s style (for reference): ${partnerStyle}`,
           },
           {
             role: "user",
