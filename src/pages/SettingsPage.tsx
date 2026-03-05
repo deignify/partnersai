@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor } from 'lucide-react';
+import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -397,6 +397,20 @@ const SettingsPage = () => {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">Open Chat</p>
                 <p className="text-[11px] text-muted-foreground">Continue chatting with your partner's AI twin</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => navigate('/insights')}
+              className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <BarChart3 className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Relationship Insights</p>
+                <p className="text-[11px] text-muted-foreground">Mood trends, activity & emotion breakdown</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
             </button>

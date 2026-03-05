@@ -10,6 +10,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import MessageReactions from '@/components/MessageReactions';
+import DailyLoveNote from '@/components/DailyLoveNote';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatViewProps {
   sessionId: string;
@@ -101,6 +103,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const chatNavigate = useNavigate();
   const { canSendMessage, messagesUsedToday, maxMessages, plan, incrementUsage } = useSubscription();
   const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
+  const { user } = useAuth();
 
   // Load reactions
   useEffect(() => {
@@ -203,13 +206,29 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     setLoading(true);
     setTyping(true);
 
-    // Persist user message to DB
+    // Persist user message to DB & track mood
+    const userId = (await supabase.auth.getUser()).data.user?.id ?? '';
     supabase.from('chat_messages').insert({
       session_id: sessionId,
-      user_id: (await supabase.auth.getUser()).data.user?.id ?? '',
+      user_id: userId,
       role: 'user',
       content: msgText,
     }).then();
+
+    // Auto-detect mood and save
+    supabase.functions.invoke('chat-suggest', {
+      body: { action: 'detect-mood', message: msgText },
+    }).then(({ data }) => {
+      if (data?.label) {
+        supabase.from('mood_entries').insert({
+          user_id: userId,
+          session_id: sessionId,
+          mood: data.label,
+          score: data.score || 5,
+          source: 'auto',
+        }).then();
+      }
+    });
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -324,6 +343,17 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                             radial-gradient(circle at 80% 20%, hsl(var(--accent) / 0.03) 0%, transparent 50%)`,
         }}
       >
+        {/* Daily Love Note */}
+        {messages.length >= 0 && (
+          <DailyLoveNote
+            sessionId={sessionId}
+            otherName={otherName}
+            memorySummary={memorySummary}
+            partnerStyle={partnerStyle}
+            meName={meName}
+          />
+        )}
+
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
             <motion.div
