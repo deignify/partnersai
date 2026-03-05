@@ -372,7 +372,15 @@ const SettingsPage = () => {
 
             {partnerInfo && (
               <button
-                onClick={() => navigate('/chat')}
+                onClick={async () => {
+                  if (!confirm('This will delete your current partner data so you can upload a new chat. Continue?')) return;
+                  await supabase.from('chat_messages').delete().eq('user_id', user!.id);
+                  await supabase.from('imported_chats').delete().eq('user_id', user!.id);
+                  await supabase.from('chat_sessions').delete().eq('user_id', user!.id);
+                  setPartnerInfo(null);
+                  toast({ title: 'Ready for re-upload!', description: 'Navigate to chat to upload a new chat.' });
+                  navigate('/chat');
+                }}
                 className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
               >
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -380,7 +388,7 @@ const SettingsPage = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">Re-upload Chat</p>
-                  <p className="text-[11px] text-muted-foreground">Update AI with newer conversations</p>
+                  <p className="text-[11px] text-muted-foreground">Delete current data & upload new chat</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0" />
               </button>

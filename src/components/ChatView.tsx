@@ -171,7 +171,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     const assistantId = crypto.randomUUID();
     let assistantContent = '';
 
-    const chatHistory = [...messages, userMsg].map(m => ({
+    // Build chat history WITHOUT the current user message (edge function adds it)
+    const chatHistory = messages.map(m => ({
       role: m.role,
       content: m.content,
     }));
