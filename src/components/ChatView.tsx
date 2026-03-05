@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Phone, Video, Settings, Sun, Moon, Sunset, Cloud } from 'lucide-react';
+import { Send, ArrowLeft, Phone, Video, Settings, Sun, Moon, Sunset, Cloud, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
@@ -313,18 +313,24 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center shrink-0 text-sm font-bold text-primary-foreground">
-          {initial}
+        <div className="relative">
+          <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center shrink-0 text-sm font-bold text-primary-foreground">
+            {initial}
+          </div>
+          {/* Online indicator */}
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
         </div>
         <div className="flex-1 min-w-0 ml-1">
           <h2 className="text-sm font-semibold truncate">{otherName}</h2>
           <p className="text-[11px] text-muted-foreground">
-            {typing ? 'typing...' : 'online'}
+            {typing ? (
+              <span className="text-green-500 font-medium">typing...</span>
+            ) : 'online'}
           </p>
         </div>
         <div className="flex items-center">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
-            <Video className="w-5 h-5" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => chatNavigate('/insights')}>
+            <BarChart3 className="w-5 h-5" />
           </Button>
           <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
             <Phone className="w-5 h-5" />
@@ -355,24 +361,55 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         )}
 
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
+          <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-6">
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 200 }}
-              className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-lg"
+              transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+              className="relative"
             >
-              {initial}
+              <div className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center text-3xl font-bold text-primary-foreground shadow-xl shadow-primary/20">
+                {initial}
+              </div>
+              <motion.div
+                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-green-500 border-3 border-background flex items-center justify-center"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.4, type: 'spring' }}
+              >
+                <span className="text-[10px]">✓</span>
+              </motion.div>
             </motion.div>
-            <div className="space-y-1">
-              <p className="text-lg font-semibold">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="space-y-2"
+            >
+              <p className="text-xl font-bold">
                 {timeGreeting.text} {timeGreeting.emoji}
               </p>
               <p className="text-sm text-muted-foreground">
-                Say something to <span className="text-primary font-semibold">{otherName}</span>
+                <span className="text-primary font-semibold">{otherName}</span> is waiting to hear from you
               </p>
-              <p className="text-[11px] text-muted-foreground/50">{timeGreeting.sub}</p>
-            </div>
+              <p className="text-[11px] text-muted-foreground/40">{timeGreeting.sub}</p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="flex gap-2"
+            >
+              {['Hey! 👋', 'Miss you 💕', `${timeGreeting.text.toLowerCase()} ☺️`].map((quickMsg, qi) => (
+                <button
+                  key={qi}
+                  onClick={() => sendMessage(quickMsg)}
+                  className="px-3 py-1.5 rounded-full text-xs border border-primary/25 text-primary bg-primary/5 hover:bg-primary/15 transition-colors"
+                >
+                  {quickMsg}
+                </button>
+              ))}
+            </motion.div>
           </div>
         )}
 
@@ -392,9 +429,9 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                   </div>
                 )}
                 <motion.div
-                  initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.12 }}
+                  transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
                   className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-0.5 group`}
                 >
                   <div className="max-w-[78%]">
@@ -413,7 +450,11 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                         {msg.content && (
                           <span className={`text-[10px] shrink-0 leading-none pb-0.5 ${isMe ? 'text-chat-me-foreground/35' : 'text-chat-ai-foreground/35'}`}>
                             {format(msg.timestamp, 'h:mm')}
-                            {isMe && <span className="ml-0.5">✓✓</span>}
+                            {isMe && (
+                              <span className="ml-0.5 inline-flex">
+                                <span className="text-blue-400">✓✓</span>
+                              </span>
+                            )}
                           </span>
                         )}
                       </div>
@@ -434,12 +475,31 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         </AnimatePresence>
 
         {typing && (
-          <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start mb-0.5">
-            <div className="bg-chat-ai border border-border/15 rounded-xl rounded-bl-sm px-4 py-2.5">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-start mb-0.5 items-end gap-1.5"
+          >
+            <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0 text-[10px] font-bold text-primary-foreground">
+              {initial}
+            </div>
+            <div className="bg-chat-ai border border-border/15 rounded-xl rounded-bl-sm px-4 py-3">
+              <div className="flex gap-1.5 items-center">
+                <motion.span
+                  className="w-2 h-2 bg-primary/60 rounded-full"
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
+                />
+                <motion.span
+                  className="w-2 h-2 bg-primary/60 rounded-full"
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.span
+                  className="w-2 h-2 bg-primary/60 rounded-full"
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}
+                />
               </div>
             </div>
           </motion.div>
