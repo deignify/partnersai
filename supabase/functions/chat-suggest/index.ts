@@ -8,7 +8,6 @@ const corsHeaders = {
 
 function getTimeContext(timezone?: string): { timeOfDay: string; greeting: string; mood: string } {
   const now = new Date();
-  // Try to use user's timezone, fallback to UTC
   let hour = now.getUTCHours();
   if (timezone) {
     try {
@@ -23,23 +22,23 @@ function getTimeContext(timezone?: string): { timeOfDay: string; greeting: strin
   return { timeOfDay: "night", greeting: "goodnight", mood: "sleepy, soft, intimate, late-night vibes" };
 }
 
-function detectEmotion(message: string): string {
+function detectEmotion(message: string): { label: string; score: number } {
   const lower = message.toLowerCase();
-  const emojiMap: [RegExp, string][] = [
-    [/😢|😭|😞|😔|💔|😿|🥺/, "sad, needs comfort"],
-    [/😡|😤|🤬|💢/, "angry, frustrated"],
-    [/😂|🤣|😆|😹|haha|lol|lmao/, "playful, laughing"],
-    [/❤|💕|💗|💖|🥰|😍|😘|love|miss you|jaanu|jaan/, "loving, romantic"],
-    [/😊|🥳|🎉|yay|happy/, "happy, excited"],
-    [/😰|😥|😟|worried|scared/, "anxious, worried"],
-    [/🙄|😒|bore|ugh/, "bored, annoyed"],
+  const emojiMap: [RegExp, string, number][] = [
+    [/😢|😭|😞|😔|💔|😿|🥺/, "sad, needs comfort", 3],
+    [/😡|😤|🤬|💢/, "angry, frustrated", 2],
+    [/😂|🤣|😆|😹|haha|lol|lmao/, "playful, laughing", 7],
+    [/❤|💕|💗|💖|🥰|😍|😘|love|miss you|jaanu|jaan/, "loving, romantic", 9],
+    [/😊|🥳|🎉|yay|happy/, "happy, excited", 8],
+    [/😰|😥|😟|worried|scared/, "anxious, worried", 4],
+    [/🙄|😒|bore|ugh/, "bored, annoyed", 4],
   ];
-  for (const [pat, emotion] of emojiMap) {
-    if (pat.test(lower)) return emotion;
+  for (const [pat, emotion, score] of emojiMap) {
+    if (pat.test(lower)) return { label: emotion, score };
   }
-  if (/\?{2,}|wtf|what|why|how/.test(lower)) return "curious, questioning";
-  if (/!{2,}|omg|wow/.test(lower)) return "excited, surprised";
-  return "neutral";
+  if (/\?{2,}|wtf|what|why|how/.test(lower)) return { label: "curious, questioning", score: 5 };
+  if (/!{2,}|omg|wow/.test(lower)) return { label: "excited, surprised", score: 8 };
+  return { label: "neutral", score: 5 };
 }
 
 async function callAI(body: Record<string, unknown>, stream = false) {
@@ -171,6 +170,58 @@ ${otherName}'s style (for reference): ${partnerStyle}`,
       return new Response(JSON.stringify({ replies: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ─── Daily Love Note ───
+    if (body.action === "love-note") {
+      const { memorySummary, partnerStyle, meName, otherName, timezone } = body;
+      const timeCtx = getTimeContext(timezone);
+
+      const result = await callAI({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You ARE ${otherName}. Write a sweet ${timeCtx.timeOfDay} love note to ${meName}. 
+This should feel like a genuine, heartfelt message — not a generic quote.
+Use ${otherName}'s exact texting style: ${partnerStyle}
+Relationship context: ${memorySummary}
+Keep it 1-3 sentences. Be warm, personal, and reference things from your relationship if possible.
+Time mood: ${timeCtx.mood}
+Plain text only, no markdown.`,
+          },
+          {
+            role: "user",
+            content: `Write a ${timeCtx.timeOfDay} love note from ${otherName} to ${meName}.`,
+          },
+        ],
+        tools: [{
+          type: "function",
+          function: {
+            name: "return_note",
+            description: "Return the love note",
+            parameters: {
+              type: "object",
+              properties: { note: { type: "string" } },
+              required: ["note"],
+              additionalProperties: false,
+            },
+          },
+        }],
+        tool_choice: { type: "function", function: { name: "return_note" } },
+      });
+
+      if ("error" in result) return errorResponse(result.error as string, result.status as number);
+      const toolCall = (result.data as any).choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall) return new Response(toolCall.function.arguments, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ note: "" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ─── Detect Mood (for tracking) ───
+    if (body.action === "detect-mood") {
+      const { message } = body;
+      const emotion = detectEmotion(message);
+      return new Response(JSON.stringify(emotion), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ─── Chat Reply (streaming) ───
     const { message, chatHistory, recentContext, memorySummary, partnerStyle, meName, otherName, timezone } = body;
 
@@ -184,7 +235,7 @@ CURRENT TIME CONTEXT:
 - The mood/energy should be: ${timeCtx.mood}
 - If greeting, use "${timeCtx.greeting}" style naturally (in their language/style)
 
-DETECTED EMOTION FROM ${meName}'s MESSAGE: ${emotion}
+DETECTED EMOTION FROM ${meName}'s MESSAGE: ${emotion.label}
 - Match your emotional response accordingly. If they're sad, be comforting. If playful, be fun. If loving, be warm.
 
 RELATIONSHIP CONTEXT:
