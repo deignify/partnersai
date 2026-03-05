@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTheme } from 'next-themes';
 
 const SettingsPage = () => {
   const { user, signOut, loading: authLoading } = useAuth();
@@ -60,6 +61,8 @@ const SettingsPage = () => {
     };
     load();
   }, [user]);
+
+  const { theme, setTheme } = useTheme();
 
   if (authLoading || !user) return null;
 
@@ -247,7 +250,35 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        {/* Subscription Section */}
+        {/* Theme Section */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Appearance</p>
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden p-4">
+            <p className="text-sm font-medium mb-3">Theme</p>
+            <div className="flex gap-2">
+              {[
+                { value: 'light', icon: Sun, label: 'Light' },
+                { value: 'dark', icon: Moon, label: 'Dark' },
+                { value: 'system', icon: Monitor, label: 'System' },
+              ].map(({ value, icon: Icon, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setTheme(value)}
+                  className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
+                    theme === value
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border/30 hover:border-primary/30 hover:bg-secondary/30'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${theme === value ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className={`text-[11px] font-medium ${theme === value ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+
         <section className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Subscription</p>
           <div className="rounded-2xl bg-card border border-border/30 overflow-hidden">
