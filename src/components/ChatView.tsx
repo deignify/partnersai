@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import MessageReactions from '@/components/MessageReactions';
 
 interface ChatViewProps {
   sessionId: string;
@@ -92,12 +93,56 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const [loading, setLoading] = useState(false);
   const [typing, setTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
+  const [userReactions, setUserReactions] = useState<Record<string, string[]>>({});
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const chatNavigate = useNavigate();
   const { canSendMessage, messagesUsedToday, maxMessages, plan, incrementUsage } = useSubscription();
   const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
+
+  // Load reactions
+  useEffect(() => {
+    const loadReactions = async () => {
+      const msgIds = messages.map(m => m.id);
+      if (msgIds.length === 0) return;
+
+      const { data } = await supabase
+        .from('message_reactions')
+        .select('message_id, emoji, user_id')
+        .in('message_id', msgIds);
+
+      if (!data) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const rxMap: Record<string, Record<string, number>> = {};
+      const urMap: Record<string, string[]> = {};
+
+      for (const r of data) {
+        if (!rxMap[r.message_id]) rxMap[r.message_id] = {};
+        rxMap[r.message_id][r.emoji] = (rxMap[r.message_id][r.emoji] || 0) + 1;
+        if (user && r.user_id === user.id) {
+          if (!urMap[r.message_id]) urMap[r.message_id] = [];
+          urMap[r.message_id].push(r.emoji);
+        }
+      }
+      setReactions(rxMap);
+      setUserReactions(urMap);
+    };
+
+    loadReactions();
+
+    // Subscribe to reaction changes
+    const channel = supabase
+      .channel('reactions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () => {
+        loadReactions();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [messages.length]);
 
   // Lock body scroll
   useEffect(() => {
@@ -320,27 +365,37 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                   initial={{ opacity: 0, y: 4, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 0.12 }}
-                  className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-0.5`}
+                  className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-0.5 group`}
                 >
-                  <div
-                    className={`max-w-[78%] px-3 py-1.5 text-[14px] leading-relaxed
-                      ${isMe
-                        ? 'bg-chat-me text-chat-me-foreground rounded-xl rounded-br-sm'
-                        : 'bg-chat-ai text-chat-ai-foreground rounded-xl rounded-bl-sm border border-border/15'
-                      }`}
-                  >
-                    {!isMe && (i === 0 || messages[i - 1]?.role === 'user') && (
-                      <p className="text-[11px] font-semibold text-primary mb-0.5">{otherName}</p>
-                    )}
-                    <div className="flex items-end gap-2">
-                      <p className="whitespace-pre-wrap break-words flex-1">{msg.content || '\u00A0'}</p>
-                      {msg.content && (
-                        <span className={`text-[10px] shrink-0 leading-none pb-0.5 ${isMe ? 'text-chat-me-foreground/35' : 'text-chat-ai-foreground/35'}`}>
-                          {format(msg.timestamp, 'h:mm')}
-                          {isMe && <span className="ml-0.5">✓✓</span>}
-                        </span>
+                  <div className="max-w-[78%]">
+                    <div
+                      className={`px-3 py-1.5 text-[14px] leading-relaxed
+                        ${isMe
+                          ? 'bg-chat-me text-chat-me-foreground rounded-xl rounded-br-sm'
+                          : 'bg-chat-ai text-chat-ai-foreground rounded-xl rounded-bl-sm border border-border/15'
+                        }`}
+                    >
+                      {!isMe && (i === 0 || messages[i - 1]?.role === 'user') && (
+                        <p className="text-[11px] font-semibold text-primary mb-0.5">{otherName}</p>
                       )}
+                      <div className="flex items-end gap-2">
+                        <p className="whitespace-pre-wrap break-words flex-1">{msg.content || '\u00A0'}</p>
+                        {msg.content && (
+                          <span className={`text-[10px] shrink-0 leading-none pb-0.5 ${isMe ? 'text-chat-me-foreground/35' : 'text-chat-ai-foreground/35'}`}>
+                            {format(msg.timestamp, 'h:mm')}
+                            {isMe && <span className="ml-0.5">✓✓</span>}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    {msg.content && (
+                      <MessageReactions
+                        messageId={msg.id}
+                        reactions={reactions[msg.id] || {}}
+                        userReactions={userReactions[msg.id] || []}
+                        isMe={isMe}
+                      />
+                    )}
                   </div>
                 </motion.div>
               </div>

@@ -3,7 +3,59 @@
 @tailwind utilities;
 
 @layer base {
+  /* ─── Light Theme ─── */
   :root {
+    --background: 270 20% 98%;
+    --foreground: 270 20% 10%;
+
+    --card: 270 15% 96%;
+    --card-foreground: 270 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 20% 10%;
+
+    --primary: 340 65% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 10% 92%;
+    --secondary-foreground: 270 15% 30%;
+
+    --muted: 270 8% 90%;
+    --muted-foreground: 270 8% 45%;
+
+    --accent: 320 55% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 270 10% 88%;
+    --input: 270 10% 88%;
+    --ring: 340 65% 50%;
+
+    --radius: 1rem;
+
+    --chat-ai: 270 12% 94%;
+    --chat-ai-foreground: 270 15% 15%;
+    --chat-me: 340 55% 92%;
+    --chat-me-foreground: 340 40% 15%;
+    --chat-composer: 270 10% 97%;
+
+    --glow-primary: 340 65% 50%;
+    --glow-accent: 280 55% 48%;
+
+    --sidebar-background: 270 15% 97%;
+    --sidebar-foreground: 270 15% 15%;
+    --sidebar-primary: 340 65% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 10% 92%;
+    --sidebar-accent-foreground: 270 15% 15%;
+    --sidebar-border: 270 10% 88%;
+    --sidebar-ring: 340 65% 50%;
+  }
+
+  /* ─── Dark Theme ─── */
+  .dark {
     --background: 270 20% 6%;
     --foreground: 300 10% 92%;
 
@@ -31,8 +83,6 @@
     --border: 270 12% 16%;
     --input: 270 12% 16%;
     --ring: 340 65% 55%;
-
-    --radius: 1rem;
 
     --chat-ai: 270 18% 14%;
     --chat-ai-foreground: 300 10% 90%;
