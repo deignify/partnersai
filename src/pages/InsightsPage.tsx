@@ -82,7 +82,7 @@ const InsightsPage = () => {
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
+    if (!authLoading && !user) navigate('/login');
   }, [authLoading, user, navigate]);
 
   useEffect(() => {

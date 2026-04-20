@@ -50,7 +50,7 @@ const ResetPasswordPage = () => {
       if (error) throw error;
       setDone(true);
       toast({ title: 'Password updated!', description: 'You can now sign in with your new password.' });
-      setTimeout(() => navigate('/auth'), 2500);
+      setTimeout(() => navigate('/login'), 2500);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
@@ -120,7 +120,7 @@ const ResetPasswordPage = () => {
 
         <p className="text-center text-xs text-muted-foreground">
           Remember your password?{' '}
-          <button onClick={() => navigate('/auth')} className="text-primary font-medium">Sign In</button>
+          <button onClick={() => navigate('/login')} className="text-primary font-medium">Sign In</button>
         </p>
       </motion.div>
     </div>

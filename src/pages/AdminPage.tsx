@@ -116,7 +116,7 @@ const AdminPage = () => {
   }, [apiCall, toast]);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
+    if (!authLoading && !user) navigate('/login');
     else if (user) loadData();
   }, [authLoading, user, navigate, loadData]);
 

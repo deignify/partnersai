@@ -33,7 +33,7 @@ const SettingsPage = () => {
   );
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
+    if (!authLoading && !user) navigate('/login');
   }, [authLoading, user, navigate]);
 
   // Load partner info
@@ -83,7 +83,7 @@ const SettingsPage = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/auth');
+    navigate('/login');
   };
 
   const handleChangePassword = async () => {
