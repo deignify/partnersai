@@ -136,15 +136,8 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
 
     loadReactions();
 
-    // Subscribe to reaction changes
-    const channel = supabase
-      .channel('reactions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () => {
-        loadReactions();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    // Reactions update locally on click; no realtime subscription needed
+    // (reactions are no longer broadcast via realtime for privacy).
   }, [messages.length]);
 
   // Lock body scroll

@@ -313,13 +313,6 @@ export type Database = {
             referencedRelation: "promo_codes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "promo_redemptions_promo_code_id_fkey"
-            columns: ["promo_code_id"]
-            isOneToOne: false
-            referencedRelation: "promo_codes_public"
-            referencedColumns: ["id"]
-          },
         ]
       }
       user_roles: {
@@ -384,39 +377,6 @@ export type Database = {
       }
     }
     Views: {
-      promo_codes_public: {
-        Row: {
-          code: string | null
-          discount_type: string | null
-          discount_value: number | null
-          id: string | null
-          is_active: boolean | null
-          plan_duration: string | null
-          valid_from: string | null
-          valid_until: string | null
-        }
-        Insert: {
-          code?: string | null
-          discount_type?: string | null
-          discount_value?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          plan_duration?: string | null
-          valid_from?: string | null
-          valid_until?: string | null
-        }
-        Update: {
-          code?: string | null
-          discount_type?: string | null
-          discount_value?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          plan_duration?: string | null
-          valid_from?: string | null
-          valid_until?: string | null
-        }
-        Relationships: []
-      }
       user_subscriptions_safe: {
         Row: {
           created_at: string | null
@@ -461,6 +421,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      validate_promo_code: {
+        Args: { _code: string }
+        Returns: {
+          code: string
+          discount_type: string
+          discount_value: number
+          id: string
+          plan_duration: string
+        }[]
       }
     }
     Enums: {
