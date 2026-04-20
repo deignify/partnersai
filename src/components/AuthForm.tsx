@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircleHeart, Mail, Lock, Eye, EyeOff, Loader2, ArrowLeft, Shield, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
-const AuthPage = () => {
-  const [mode, setMode] = useState<Mode>('signin');
+interface AuthFormProps {
+  initialMode: 'signin' | 'signup';
+}
+
+const AuthForm = ({ initialMode }: AuthFormProps) => {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -18,6 +23,23 @@ const AuthPage = () => {
   const [forgotSent, setForgotSent] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Redirect if already signed in
+  useEffect(() => {
+    if (user) navigate('/chat', { replace: true });
+  }, [user, navigate]);
+
+  // Sync mode with initialMode changes (when user navigates between /login & /register)
+  useEffect(() => {
+    setMode(initialMode);
+    setForgotSent(false);
+  }, [initialMode]);
+
+  const switchMode = (target: 'signin' | 'signup') => {
+    setMode(target);
+    navigate(target === 'signin' ? '/login' : '/register', { replace: true });
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +98,14 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Back to home */}
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-4 left-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors z-20"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" /> Home
+      </button>
+
       {/* Ambient glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[300px] h-[300px] rounded-full bg-accent/5 blur-[100px] pointer-events-none" />
@@ -121,7 +151,6 @@ const AuthPage = () => {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* Forgot Password form */}
           {mode === 'forgot' && (
             <motion.div key="forgot" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               {forgotSent ? (
@@ -152,10 +181,8 @@ const AuthPage = () => {
             </motion.div>
           )}
 
-          {/* Google + Email Auth */}
           {mode !== 'forgot' && (
             <motion.div key="auth" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
-              {/* Google */}
               <Button
                 onClick={handleGoogle}
                 disabled={loading}
@@ -177,7 +204,6 @@ const AuthPage = () => {
                 <div className="flex-1 h-px bg-border/50" />
               </div>
 
-              {/* Email form */}
               <form onSubmit={handleEmailAuth} className="space-y-3">
                 <div className="relative group">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -226,12 +252,11 @@ const AuthPage = () => {
 
               <p className="text-center text-xs text-muted-foreground">
                 {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-                <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="text-primary font-semibold hover:underline transition-colors">
+                <button onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')} className="text-primary font-semibold hover:underline transition-colors">
                   {mode === 'signin' ? 'Sign Up' : 'Sign In'}
                 </button>
               </p>
 
-              {/* Trust badges */}
               <div className="flex items-center justify-center gap-4 pt-2">
                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
                   <Shield className="w-3 h-3" /> Encrypted
@@ -249,7 +274,6 @@ const AuthPage = () => {
           )}
         </AnimatePresence>
 
-        {/* Legal links */}
         <div className="flex justify-center gap-3 pt-2">
           <button onClick={() => navigate('/privacy')} className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors">Privacy</button>
           <span className="text-muted-foreground/20">•</span>
@@ -262,4 +286,4 @@ const AuthPage = () => {
   );
 };
 
-export default AuthPage;
+export default AuthForm;

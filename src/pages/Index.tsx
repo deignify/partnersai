@@ -38,7 +38,7 @@ const Index = () => {
   const priceDisplay = currency === 'INR' ? { symbol: '₹', amount: '499', paise: 49900 } : { symbol: '$', amount: '9', paise: 900 };
 
   const handleUpgrade = async () => {
-    if (!user) { navigate('/auth'); return; }
+    if (!user) { navigate('/login'); return; }
     setPaymentLoading(true);
     try {
       const session = await supabase.auth.getSession();
@@ -90,7 +90,7 @@ const Index = () => {
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
-    if (!user) { navigate('/auth'); return; }
+    if (!user) { navigate('/login'); return; }
     setPromoLoading(true);
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -251,9 +251,14 @@ const Index = () => {
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => navigate('/auth')} className="h-8 text-xs gradient-primary border-0">
-                Get Started
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="h-8 text-xs">
+                  Sign In
+                </Button>
+                <Button size="sm" onClick={() => navigate('/register')} className="h-8 text-xs gradient-primary border-0">
+                  Sign Up
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -282,7 +287,7 @@ const Index = () => {
           </motion.p>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button onClick={() => user ? navigate('/chat') : navigate('/auth')}
+            <Button onClick={() => user ? navigate('/chat') : navigate('/register')}
               className="h-12 px-8 rounded-xl gradient-primary border-0 text-base gap-2 shadow-lg shadow-primary/20">
               {user ? 'Open Chat' : 'Start Free'} <ArrowRight className="w-4 h-4" />
             </Button>
@@ -411,7 +416,7 @@ const Index = () => {
                   </li>
                 ))}
               </ul>
-              <Button variant="outline" onClick={() => user ? navigate('/chat') : navigate('/auth')}
+              <Button variant="outline" onClick={() => user ? navigate('/chat') : navigate('/login')}
                 className="w-full h-10 rounded-xl border-border/40">
                 {user ? 'Open Chat' : 'Get Started'}
               </Button>

@@ -27,7 +27,7 @@ const ChatPage = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
+    if (!authLoading && !user) navigate('/login');
   }, [authLoading, user, navigate]);
 
   // Check for existing session on mount
@@ -186,7 +186,7 @@ const ChatPage = () => {
         memorySummary={memorySummary}
         partnerStyle={partnerStyle}
         existingMessages={existingMessages}
-        onBack={() => navigate('/settings')}
+        onBack={() => navigate('/')}
       />
     );
   }
