@@ -328,7 +328,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
           <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
             <Phone className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={onBack}>
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => chatNavigate('/settings')}>
             <Settings className="w-5 h-5" />
           </Button>
         </div>
