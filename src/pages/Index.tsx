@@ -251,9 +251,14 @@ const Index = () => {
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => navigate('/login')} className="h-8 text-xs gradient-primary border-0">
-                Get Started
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="h-8 text-xs">
+                  Sign In
+                </Button>
+                <Button size="sm" onClick={() => navigate('/register')} className="h-8 text-xs gradient-primary border-0">
+                  Sign Up
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -282,7 +287,7 @@ const Index = () => {
           </motion.p>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button onClick={() => user ? navigate('/chat') : navigate('/login')}
+            <Button onClick={() => user ? navigate('/chat') : navigate('/register')}
               className="h-12 px-8 rounded-xl gradient-primary border-0 text-base gap-2 shadow-lg shadow-primary/20">
               {user ? 'Open Chat' : 'Start Free'} <ArrowRight className="w-4 h-4" />
             </Button>
