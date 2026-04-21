@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -189,14 +189,7 @@ const Index = () => {
     setPaymentLoading(false);
   };
 
-  // Redirect authenticated users straight to the chat dashboard
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/chat', { replace: true });
-    }
-  }, [loading, user, navigate]);
-
-  if (loading || user) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-10 h-10 rounded-xl gradient-primary animate-pulse flex items-center justify-center">
