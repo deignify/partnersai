@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageCircleHeart, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,10 +8,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from 'next-themes';
+import ProfileSection from '@/components/settings/ProfileSection';
+import BillingHistory from '@/components/settings/BillingHistory';
+import DangerZone from '@/components/settings/DangerZone';
 
 const SettingsPage = () => {
-  const { user, signOut, loading: authLoading } = useAuth();
-  const [deleting, setDeleting] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; messageCount: number; createdAt: string } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -65,26 +67,6 @@ const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
 
   if (authLoading || !user) return null;
-
-  const handleDeleteAll = async () => {
-    if (!confirm('Are you sure? This will delete your chat partner, all messages, and uploaded data. This cannot be undone.')) return;
-    setDeleting(true);
-    try {
-      await supabase.from('chat_messages').delete().eq('user_id', user!.id);
-      await supabase.from('imported_chats').delete().eq('user_id', user!.id);
-      await supabase.from('chat_sessions').delete().eq('user_id', user!.id);
-      setPartnerInfo(null);
-      toast({ title: 'All data deleted', description: 'Everything wiped clean 💨' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-    setDeleting(false);
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
-  };
 
   const handleChangePassword = async () => {
     setResetLoading(true);
@@ -216,21 +198,14 @@ const SettingsPage = () => {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
         {/* Account Section */}
         <section className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Account</p>
-          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
-            <div className="p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 text-lg font-bold text-primary-foreground shadow-md shadow-primary/20">
-                {userInitial}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Signed in via {user?.app_metadata?.provider === 'google' ? 'Google' : 'Email'}
-                </p>
-              </div>
-            </div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Profile</p>
+          <ProfileSection />
+        </section>
 
-            {/* Change password */}
+        {/* Security */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Security</p>
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
             <button
               onClick={handleChangePassword}
               disabled={resetLoading}
@@ -488,33 +463,13 @@ const SettingsPage = () => {
         {/* Danger Zone */}
         <section className="space-y-2">
           <p className="text-xs font-semibold text-destructive/70 uppercase tracking-wider px-1">Danger Zone</p>
-          <div className="rounded-2xl bg-card border border-destructive/15 overflow-hidden divide-y divide-border/20">
-            <button
-              onClick={handleDeleteAll}
-              disabled={deleting}
-              className="w-full p-4 flex items-center gap-3 hover:bg-destructive/5 transition-colors text-left"
-            >
-              {deleting ? (
-                <Loader2 className="w-5 h-5 text-destructive animate-spin shrink-0" />
-              ) : (
-                <Trash2 className="w-5 h-5 text-destructive shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-medium text-destructive">Delete All Data</p>
-                <p className="text-[11px] text-muted-foreground">Remove partner, messages & uploaded chats</p>
-              </div>
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
-            >
-              <LogOut className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Sign Out</p>
-                <p className="text-[11px] text-muted-foreground">Log out of your account</p>
-              </div>
-            </button>
-          </div>
+          <DangerZone />
+        </section>
+
+        {/* Billing History */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Billing History</p>
+          <BillingHistory />
         </section>
 
         {/* Legal Links */}
