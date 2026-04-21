@@ -463,33 +463,13 @@ const SettingsPage = () => {
         {/* Danger Zone */}
         <section className="space-y-2">
           <p className="text-xs font-semibold text-destructive/70 uppercase tracking-wider px-1">Danger Zone</p>
-          <div className="rounded-2xl bg-card border border-destructive/15 overflow-hidden divide-y divide-border/20">
-            <button
-              onClick={handleDeleteAll}
-              disabled={deleting}
-              className="w-full p-4 flex items-center gap-3 hover:bg-destructive/5 transition-colors text-left"
-            >
-              {deleting ? (
-                <Loader2 className="w-5 h-5 text-destructive animate-spin shrink-0" />
-              ) : (
-                <Trash2 className="w-5 h-5 text-destructive shrink-0" />
-              )}
-              <div>
-                <p className="text-sm font-medium text-destructive">Delete All Data</p>
-                <p className="text-[11px] text-muted-foreground">Remove partner, messages & uploaded chats</p>
-              </div>
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="w-full p-4 flex items-center gap-3 hover:bg-secondary/30 transition-colors text-left"
-            >
-              <LogOut className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Sign Out</p>
-                <p className="text-[11px] text-muted-foreground">Log out of your account</p>
-              </div>
-            </button>
-          </div>
+          <DangerZone />
+        </section>
+
+        {/* Billing History */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Billing History</p>
+          <BillingHistory />
         </section>
 
         {/* Legal Links */}
