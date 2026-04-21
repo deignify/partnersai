@@ -198,21 +198,14 @@ const SettingsPage = () => {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
         {/* Account Section */}
         <section className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Account</p>
-          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
-            <div className="p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 text-lg font-bold text-primary-foreground shadow-md shadow-primary/20">
-                {userInitial}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Signed in via {user?.app_metadata?.provider === 'google' ? 'Google' : 'Email'}
-                </p>
-              </div>
-            </div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Profile</p>
+          <ProfileSection />
+        </section>
 
-            {/* Change password */}
+        {/* Security */}
+        <section className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Security</p>
+          <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
             <button
               onClick={handleChangePassword}
               disabled={resetLoading}
