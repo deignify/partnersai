@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Trash2, LogOut, Loader2, MessageCircleHeart, User, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageCircleHeart, Heart, Clock, Shield, Crown, Ticket, Check, ChevronRight, KeyRound, RefreshCw, Sun, Moon, Monitor, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from 'next-themes';
+import ProfileSection from '@/components/settings/ProfileSection';
+import BillingHistory from '@/components/settings/BillingHistory';
+import DangerZone from '@/components/settings/DangerZone';
 
 const SettingsPage = () => {
   const { user, signOut, loading: authLoading } = useAuth();
