@@ -13,8 +13,7 @@ import BillingHistory from '@/components/settings/BillingHistory';
 import DangerZone from '@/components/settings/DangerZone';
 
 const SettingsPage = () => {
-  const { user, signOut, loading: authLoading } = useAuth();
-  const [deleting, setDeleting] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; messageCount: number; createdAt: string } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -68,26 +67,6 @@ const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
 
   if (authLoading || !user) return null;
-
-  const handleDeleteAll = async () => {
-    if (!confirm('Are you sure? This will delete your chat partner, all messages, and uploaded data. This cannot be undone.')) return;
-    setDeleting(true);
-    try {
-      await supabase.from('chat_messages').delete().eq('user_id', user!.id);
-      await supabase.from('imported_chats').delete().eq('user_id', user!.id);
-      await supabase.from('chat_sessions').delete().eq('user_id', user!.id);
-      setPartnerInfo(null);
-      toast({ title: 'All data deleted', description: 'Everything wiped clean 💨' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-    setDeleting(false);
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
-  };
 
   const handleChangePassword = async () => {
     setResetLoading(true);
