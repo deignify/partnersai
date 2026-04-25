@@ -1,10 +1,70 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const RATE_LIMIT_MAX = 60; // requests
+const RATE_LIMIT_WINDOW_MS = 60_000; // per 1 minute
+
+async function checkRateLimit(userId: string, endpoint: string): Promise<{ ok: boolean; remaining: number }> {
+  try {
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+
+    const { data: existing } = await admin
+      .from("rate_limits")
+      .select("id, request_count, window_start")
+      .eq("user_id", userId)
+      .eq("endpoint", endpoint)
+      .gte("window_start", windowStart)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.request_count >= RATE_LIMIT_MAX) {
+        return { ok: false, remaining: 0 };
+      }
+      await admin
+        .from("rate_limits")
+        .update({ request_count: existing.request_count + 1 })
+        .eq("id", existing.id);
+      return { ok: true, remaining: RATE_LIMIT_MAX - existing.request_count - 1 };
+    }
+
+    await admin.from("rate_limits").insert({
+      user_id: userId,
+      endpoint,
+      request_count: 1,
+      window_start: new Date().toISOString(),
+    });
+    return { ok: true, remaining: RATE_LIMIT_MAX - 1 };
+  } catch (e) {
+    console.error("rate limit check failed:", e);
+    return { ok: true, remaining: RATE_LIMIT_MAX }; // fail-open
+  }
+}
+
+async function getUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return null;
+  try {
+    const supa = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data } = await supa.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function getTimeContext(timezone?: string): { timeOfDay: string; greeting: string; mood: string } {
   const now = new Date();
@@ -78,6 +138,16 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
+
+    // Server-side rate limit (per authenticated user, per endpoint/action)
+    const userId = await getUserId(req);
+    if (userId) {
+      const action = (body.action as string) || "chat-reply";
+      const rl = await checkRateLimit(userId, `chat-suggest:${action}`);
+      if (!rl.ok) {
+        return errorResponse("Rate limit exceeded. Try again in a minute.", 429);
+      }
+    }
 
     // ─── Build Memory ───
     if (body.action === "build-memory") {
