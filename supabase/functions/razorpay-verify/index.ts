@@ -61,6 +61,37 @@ serve(async (req) => {
       current_period_end: periodEnd.toISOString(),
     }, { onConflict: 'user_id' });
 
+    // Log to payment_history for billing UI
+    try {
+      // Fetch order to get amount/currency
+      const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID');
+      let amount = 0;
+      let currency = 'INR';
+      if (RAZORPAY_KEY_ID) {
+        const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
+        const orderRes = await fetch(`https://api.razorpay.com/v1/orders/${razorpay_order_id}`, {
+          headers: { Authorization: `Basic ${auth}` },
+        });
+        if (orderRes.ok) {
+          const order = await orderRes.json();
+          amount = (order.amount ?? 0) / 100;
+          currency = order.currency ?? 'INR';
+        }
+      }
+      await adminSupabase.from('payment_history').insert({
+        user_id: user.id,
+        amount,
+        currency,
+        plan: 'pro',
+        plan_duration: 'month',
+        status: 'success',
+        razorpay_order_id,
+        razorpay_payment_id,
+      });
+    } catch (logErr) {
+      console.error('payment_history log failed:', logErr);
+    }
+
     return new Response(JSON.stringify({ success: true, plan: 'pro' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
