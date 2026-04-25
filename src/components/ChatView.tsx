@@ -1,8 +1,26 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Phone, Video, Settings, Sun, Moon, Sunset, Cloud, BarChart3 } from 'lucide-react';
+import { Send, ArrowLeft, Phone, Settings, Sun, Moon, Sunset, Cloud, BarChart3, MoreVertical, Search, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { streamPartnerReply, fetchReplySuggestions } from '@/lib/aiService';
 import type { ParsedMessage } from '@/lib/chatParser';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +40,7 @@ interface ChatViewProps {
   partnerStyle: string;
   existingMessages?: { role: string; content: string; created_at: string }[];
   onBack: () => void;
+  onResetPartner?: () => void;
 }
 
 interface ChatMsg {
@@ -72,7 +91,7 @@ function useVisualViewport() {
   return vp;
 }
 
-const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, existingMessages, onBack }: ChatViewProps) => {
+const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummary, partnerStyle, existingMessages, onBack, onResetPartner }: ChatViewProps) => {
   const timeGreeting = useMemo(() => {
     const h = new Date().getHours();
     if (h >= 5 && h < 12) return { text: 'Good morning', emoji: '☀️', icon: Sun, sub: 'Start your day with a sweet text' };
@@ -97,6 +116,10 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [reactions, setReactions] = useState<Record<string, Record<string, number>>>({});
   const [userReactions, setUserReactions] = useState<Record<string, string[]>>({});
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
+  const [partnerAvatarUrl, setPartnerAvatarUrl] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -104,6 +127,40 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const { canSendMessage, messagesUsedToday, maxMessages, plan, incrementUsage } = useSubscription();
   const { height: vpHeight, offsetTop: vpOffset } = useVisualViewport();
   const { user } = useAuth();
+
+  // Load my profile avatar (used as partner avatar visual since AI roleplays partner)
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setPartnerAvatarUrl(data?.avatar_url ?? null));
+  }, [user]);
+
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter(m => m.content.toLowerCase().includes(q));
+  }, [messages, searchQuery]);
+
+  const handleResetPartner = async () => {
+    if (!user) return;
+    try {
+      // Delete imported chat first (FK), then messages, then session
+      await supabase.from('imported_chats').delete().eq('user_id', user.id);
+      await supabase.from('chat_messages').delete().eq('session_id', sessionId);
+      await supabase.from('love_notes').delete().eq('session_id', sessionId);
+      await supabase.from('mood_entries').delete().eq('session_id', sessionId);
+      await supabase.from('chat_sessions').delete().eq('id', sessionId);
+      toast({ title: 'Partner reset', description: 'Upload a new chat to start fresh.' });
+      setResetOpen(false);
+      onResetPartner?.();
+    } catch (e: any) {
+      toast({ title: 'Reset failed', description: e.message, variant: 'destructive' });
+    }
+  };
 
   // Load reactions
   useEffect(() => {
