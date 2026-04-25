@@ -360,35 +360,83 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     >
       {/* Header */}
       <header className="flex items-center gap-2 px-2 py-2 bg-card/95 backdrop-blur-md border-b border-border/20 shrink-0 z-20">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="relative">
-          <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center shrink-0 text-sm font-bold text-primary-foreground">
-            {initial}
-          </div>
-          {/* Online indicator */}
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
-        </div>
-        <div className="flex-1 min-w-0 ml-1">
-          <h2 className="text-sm font-semibold truncate">{otherName}</h2>
-          <p className="text-[11px] text-muted-foreground">
-            {typing ? (
-              <span className="text-green-500 font-medium">typing...</span>
-            ) : 'online'}
-          </p>
-        </div>
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => chatNavigate('/insights')}>
-            <BarChart3 className="w-5 h-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground">
-            <Phone className="w-5 h-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => chatNavigate('/settings')}>
-            <Settings className="w-5 h-5" />
-          </Button>
-        </div>
+        {searchOpen ? (
+          <>
+            <Button variant="ghost" size="icon" onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="shrink-0 h-9 w-9 -ml-1">
+              <X className="w-5 h-5" />
+            </Button>
+            <Input
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search messages..."
+              className="h-9 flex-1 bg-secondary/40 border-border/20"
+            />
+            {searchQuery && (
+              <span className="text-[11px] text-muted-foreground shrink-0 px-1">
+                {filteredMessages.length}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0 h-9 w-9 -ml-1" aria-label="Back">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="relative">
+              {partnerAvatarUrl ? (
+                <img
+                  src={partnerAvatarUrl}
+                  alt={`${otherName} avatar`}
+                  className="w-9 h-9 rounded-full object-cover shrink-0 border border-border/20"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center shrink-0 text-sm font-bold text-primary-foreground">
+                  {initial}
+                </div>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+            </div>
+            <div className="flex-1 min-w-0 ml-1">
+              <h2 className="text-sm font-semibold truncate">{otherName}</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {typing ? (
+                  <span className="text-green-500 font-medium">typing...</span>
+                ) : 'online'}
+              </p>
+            </div>
+            <div className="flex items-center">
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => setSearchOpen(true)} aria-label="Search">
+                <Search className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => chatNavigate('/insights')} aria-label="Insights">
+                <BarChart3 className="w-5 h-5" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" aria-label="More">
+                    <MoreVertical className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => chatNavigate('/settings')}>
+                    <Settings className="w-4 h-4 mr-2" /> Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => chatNavigate('/insights')}>
+                    <BarChart3 className="w-4 h-4 mr-2" /> Insights
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setResetOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" /> Reset partner
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </>
+        )}
       </header>
 
       {/* Messages */}
@@ -464,10 +512,10 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
         )}
 
         <AnimatePresence initial={false}>
-          {messages.map((msg, i) => {
+          {filteredMessages.map((msg, i) => {
             const isMe = msg.role === 'user';
             const showTime = i === 0 ||
-              (msg.timestamp.getTime() - messages[i - 1].timestamp.getTime()) > 300000;
+              (msg.timestamp.getTime() - filteredMessages[i - 1].timestamp.getTime()) > 300000;
 
             return (
               <div key={msg.id}>
@@ -557,6 +605,24 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
 
         <div ref={endRef} />
       </div>
+
+      {/* Reset partner confirmation */}
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset partner & start over?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes your imported chat, all simulated messages, mood entries and love notes for {otherName}. You'll be able to upload a new WhatsApp export. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetPartner} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Yes, reset everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Reply Suggestions */}
       {suggestions.length > 0 && !loading && (
