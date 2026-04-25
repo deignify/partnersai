@@ -186,7 +186,18 @@ const ChatPage = () => {
         memorySummary={memorySummary}
         partnerStyle={partnerStyle}
         existingMessages={existingMessages}
-        onBack={() => navigate('/')}
+        onBack={() => navigate('/settings')}
+        onResetPartner={() => {
+          setSessionId('');
+          setExistingMessages([]);
+          setImportedMessages([]);
+          setMemorySummary('');
+          setPartnerStyle('');
+          setMeName('');
+          setOtherName('');
+          setParseResult(null);
+          setScreen('landing');
+        }}
       />
     );
   }
