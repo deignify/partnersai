@@ -5,6 +5,7 @@ import {
   ArrowLeft, Users, Crown, MessageCircleHeart, Loader2,
   Shield, Trash2, UserPlus, UserMinus, RefreshCw, Plus,
   Ticket, Edit2, X, Check, ChevronDown, ChevronUp,
+  Search, Download, FileText, IndianRupee, TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -43,9 +44,23 @@ interface Stats {
   freeUsers: number;
   totalMessages: number;
   totalPromos: number;
+  mrr?: number;
+  arr?: number;
+  totalRevenue?: number;
+  newUsers7d?: number;
+  newUsers30d?: number;
 }
 
-type Tab = 'users' | 'promos';
+type Tab = 'users' | 'promos' | 'audit';
+
+interface AuditLog {
+  id: string;
+  admin_id: string;
+  action: string;
+  target_user_id: string | null;
+  details: any;
+  created_at: string;
+}
 
 const AdminPage = () => {
   const { user, loading: authLoading } = useAuth();
@@ -61,6 +76,10 @@ const AdminPage = () => {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [showPromoForm, setShowPromoForm] = useState(false);
   const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
+  const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState<'all' | 'pro' | 'free' | 'admin'>('all');
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   // Promo form state
   const [promoForm, setPromoForm] = useState({
@@ -119,6 +138,74 @@ const AdminPage = () => {
     if (!authLoading && !user) navigate('/login');
     else if (user) loadData();
   }, [authLoading, user, navigate, loadData]);
+
+  // Lazy-load audit log when tab opens
+  useEffect(() => {
+    if (activeTab !== 'audit' || auditLogs.length > 0) return;
+    setAuditLoading(true);
+    apiCall('audit-log')
+      .then(res => setAuditLogs(res.logs || []))
+      .catch(() => {})
+      .finally(() => setAuditLoading(false));
+  }, [activeTab, auditLogs.length, apiCall]);
+
+  // Filtered users
+  const filteredUsers = users.filter(u => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch = !q || u.email?.toLowerCase().includes(q);
+    const matchesPlan =
+      planFilter === 'all' ? true :
+      planFilter === 'admin' ? u.roles.includes('admin') :
+      u.plan === planFilter;
+    return matchesSearch && matchesPlan;
+  });
+
+  const exportCSV = (rows: Record<string, any>[], filename: string) => {
+    if (!rows.length) {
+      toast({ title: 'Nothing to export', variant: 'destructive' });
+      return;
+    }
+    const cols = Object.keys(rows[0]);
+    const escape = (v: any) => {
+      if (v == null) return '';
+      const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [cols.join(','), ...rows.map(r => cols.map(c => escape(r[c])).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportUsers = () => exportCSV(
+    filteredUsers.map(u => ({
+      email: u.email, plan: u.plan, plan_duration: u.plan_duration,
+      status: u.subscription_status, period_end: u.current_period_end,
+      roles: u.roles.join('|'), joined: u.created_at, last_sign_in: u.last_sign_in_at,
+    })),
+    `users-${new Date().toISOString().slice(0, 10)}.csv`
+  );
+
+  const handleExportPayments = async () => {
+    try {
+      const res = await apiCall('payments');
+      exportCSV(
+        (res.payments || []).map((p: any) => ({
+          email: p.email, amount: p.amount, currency: p.currency,
+          plan: p.plan, plan_duration: p.plan_duration, status: p.status,
+          promo_code: p.promo_code, razorpay_order_id: p.razorpay_order_id,
+          razorpay_payment_id: p.razorpay_payment_id, created_at: p.created_at,
+        })),
+        `payments-${new Date().toISOString().slice(0, 10)}.csv`
+      );
+    } catch (e: any) {
+      toast({ title: 'Export failed', description: e.message, variant: 'destructive' });
+    }
+  };
 
   const handleAction = async (action: string, body: any, loadingKey: string) => {
     setActionLoading(loadingKey);
@@ -227,34 +314,54 @@ const AdminPage = () => {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
         {/* Stats */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {[
-              { label: 'Users', value: stats.totalUsers, icon: Users },
-              { label: 'Pro', value: stats.proUsers, icon: Crown },
-              { label: 'Free', value: stats.freeUsers, icon: Users },
-              { label: 'Messages', value: stats.totalMessages, icon: MessageCircleHeart },
-              { label: 'Promos', value: stats.totalPromos, icon: Ticket },
-            ].map(({ label, value, icon: Icon }) => (
-              <div key={label} className="p-3 rounded-2xl bg-card border border-border/30 space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <Icon className="w-3.5 h-3.5 text-primary" />
-                  <p className="text-[10px] text-muted-foreground">{label}</p>
+          <div className="space-y-3">
+            {/* Revenue cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { label: 'MRR', value: `₹${(stats.mrr ?? 0).toLocaleString()}`, icon: IndianRupee, accent: true },
+                { label: 'ARR', value: `₹${(stats.arr ?? 0).toLocaleString()}`, icon: TrendingUp, accent: true },
+                { label: 'Total Revenue', value: `₹${(stats.totalRevenue ?? 0).toLocaleString()}`, icon: IndianRupee },
+              ].map(({ label, value, icon: Icon, accent }) => (
+                <div key={label} className={`p-3.5 rounded-2xl border space-y-1 ${accent ? 'bg-gradient-to-br from-primary/10 to-card border-primary/20' : 'bg-card border-border/30'}`}>
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="w-3.5 h-3.5 text-primary" />
+                    <p className="text-[10px] text-muted-foreground">{label}</p>
+                  </div>
+                  <p className="text-lg font-bold">{value}</p>
                 </div>
-                <p className="text-xl font-bold">{value.toLocaleString()}</p>
-              </div>
-            ))}
+              ))}
+            </div>
+            {/* Counts */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {[
+                { label: 'Users', value: stats.totalUsers, icon: Users, sub: stats.newUsers7d != null ? `+${stats.newUsers7d} (7d)` : null },
+                { label: 'Pro', value: stats.proUsers, icon: Crown, sub: null },
+                { label: 'Free', value: stats.freeUsers, icon: Users, sub: null },
+                { label: 'Messages', value: stats.totalMessages, icon: MessageCircleHeart, sub: null },
+                { label: 'Promos', value: stats.totalPromos, icon: Ticket, sub: null },
+              ].map(({ label, value, icon: Icon, sub }) => (
+                <div key={label} className="p-3 rounded-2xl bg-card border border-border/30 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="w-3.5 h-3.5 text-primary" />
+                    <p className="text-[10px] text-muted-foreground">{label}</p>
+                  </div>
+                  <p className="text-xl font-bold">{value.toLocaleString()}</p>
+                  {sub && <p className="text-[9px] text-primary/70">{sub}</p>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-secondary/30 rounded-xl p-1 border border-border/20">
-          {(['users', 'promos'] as Tab[]).map(tab => (
+          {(['users', 'promos', 'audit'] as Tab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2 px-4 rounded-lg text-xs font-medium transition-all ${activeTab === tab ? 'gradient-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              {tab === 'users' ? '👥 Users' : '🎟️ Promo Codes'}
+              {tab === 'users' ? '👥 Users' : tab === 'promos' ? '🎟️ Promo Codes' : '📝 Audit'}
             </button>
           ))}
         </div>
@@ -262,11 +369,44 @@ const AdminPage = () => {
         {/* Users Tab */}
         {activeTab === 'users' && (
           <section className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
-              Users ({users.length})
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search by email…"
+                  className="w-full h-8 pl-8 pr-3 rounded-lg bg-secondary/40 border border-border/30 text-xs outline-none focus:border-primary/50"
+                />
+              </div>
+              <select
+                value={planFilter}
+                onChange={e => setPlanFilter(e.target.value as any)}
+                className="h-8 px-2 rounded-lg bg-secondary/40 border border-border/30 text-xs outline-none focus:border-primary/50"
+              >
+                <option value="all">All</option>
+                <option value="pro">Pro</option>
+                <option value="free">Free</option>
+                <option value="admin">Admins</option>
+              </select>
+              <Button size="sm" variant="outline" className="h-8 text-[11px] gap-1" onClick={handleExportUsers}>
+                <Download className="w-3 h-3" /> Users CSV
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-[11px] gap-1" onClick={handleExportPayments}>
+                <FileText className="w-3 h-3" /> Payments CSV
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground px-1">
+              Showing {filteredUsers.length} of {users.length}
             </p>
             <div className="space-y-2">
-              {users.map(u => {
+              {filteredUsers.length === 0 && (
+                <div className="rounded-2xl bg-card border border-border/30 p-8 text-center">
+                  <Search className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No users match your filters</p>
+                </div>
+              )}
+              {filteredUsers.map(u => {
                 const isExpanded = expandedUser === u.id;
                 return (
                   <div key={u.id} className="rounded-2xl bg-card border border-border/30 overflow-hidden">
