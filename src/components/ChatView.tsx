@@ -30,6 +30,8 @@ import { format } from 'date-fns';
 import MessageReactions from '@/components/MessageReactions';
 import DailyLoveNote from '@/components/DailyLoveNote';
 import { useAuth } from '@/contexts/AuthContext';
+import OnboardingTour from '@/components/OnboardingTour';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 
 interface ChatViewProps {
   sessionId: string;
@@ -677,12 +679,13 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
             disabled={!draft.trim() || loading || !canSendMessage}
             className="w-11 h-11 rounded-full gradient-primary flex items-center justify-center shrink-0 shadow-md disabled:opacity-40 active:scale-95 transition-transform"
           >
-            <Send className="w-[18px] h-[18px] text-primary-foreground" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+             <Send className="w-[18px] h-[18px] text-primary-foreground" />
+           </button>
+         </div>
+       </div>
+       <OnboardingTour />
+     </div>
+   );
+ };
 
 export default ChatView;
