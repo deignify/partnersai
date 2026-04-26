@@ -122,6 +122,7 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
   const [searchQuery, setSearchQuery] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
   const [partnerAvatarUrl, setPartnerAvatarUrl] = useState<string | null>(null);
+  const [digestLoading, setDigestLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -162,6 +163,50 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
     } catch (e: any) {
       toast({ title: 'Reset failed', description: e.message, variant: 'destructive' });
     }
+  };
+
+  const handleExportChat = () => {
+    if (messages.length === 0) {
+      toast({ title: 'Nothing to export', description: 'Send a few messages first.' });
+      return;
+    }
+    const lines = messages.map(m => {
+      const who = m.role === 'user' ? meName : otherName;
+      const ts = format(m.timestamp, 'yyyy-MM-dd HH:mm');
+      return `[${ts}] ${who}: ${m.content}`;
+    });
+    const header = `PartnerAI conversation\n${meName} ↔ ${otherName}\nExported: ${new Date().toISOString()}\n${'-'.repeat(40)}\n\n`;
+    const blob = new Blob([header + lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `partnerai-chat-${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Chat exported 📄' });
+  };
+
+  const handleWeeklyDigest = async () => {
+    setDigestLoading(true);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weekly-digest`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const summary = data.ai_summary || `This week with ${data.partner_name || 'your partner'}: ${data.messages_count} messages, mostly ${data.top_mood} mood.`;
+      toast({
+        title: '💌 Your weekly summary',
+        description: summary,
+        duration: 10000,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not load summary';
+      toast({ title: 'Summary unavailable', description: msg, variant: 'destructive' });
+    }
+    setDigestLoading(false);
   };
 
   // Load reactions
