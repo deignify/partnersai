@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import BottomNav from "@/components/layout/BottomNav";
 import EmailVerifiedBanner from "@/components/EmailVerifiedBanner";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -34,6 +35,7 @@ const App = () => (
           <BrowserRouter>
             <ErrorBoundary>
               <EmailVerifiedBanner />
+              <KeyboardShortcuts />
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<LoginPage />} />
