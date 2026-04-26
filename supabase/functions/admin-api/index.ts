@@ -96,7 +96,7 @@ serve(async (req) => {
         // Revenue: compute MRR/ARR from successful payments in payment_history
         const { data: payments } = await adminSupabase
           .from('payment_history')
-          .select('amount, currency, plan_duration, status, created_at');
+          .select('amount, currency, plan_duration, status, created_at, user_id');
 
         // Convert everything to INR for a single revenue figure (rough: 1 USD = 83 INR)
         const usdToInr = 83;
