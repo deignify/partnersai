@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 import { format, subDays, parseISO, differenceInDays } from 'date-fns';
 import {
   ChartContainer,
@@ -72,6 +73,10 @@ const fadeUp = {
 
 const InsightsPage = () => {
   const { user, loading: authLoading } = useAuth();
+  useDocumentMeta({
+    title: 'Relationship Insights | PartnerAI',
+    description: 'See mood trends, chat streaks and emotional patterns from your conversations.',
+  });
   const navigate = useNavigate();
   const [moods, setMoods] = useState<MoodEntry[]>([]);
   const [usage, setUsage] = useState<DailyUsage[]>([]);
