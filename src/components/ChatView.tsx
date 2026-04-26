@@ -355,6 +355,11 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
 
   const initial = otherName.charAt(0).toUpperCase();
 
+  useDocumentMeta({
+    title: `${otherName} • PartnerAI Chat`,
+    description: `Chat with ${otherName}'s AI twin — replies in their voice, anytime.`,
+  });
+
   return (
     <div
       className="fixed left-0 right-0 flex flex-col bg-background max-w-lg mx-auto overflow-hidden safe-area-inset"
