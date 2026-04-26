@@ -717,6 +717,65 @@ const AdminPage = () => {
             </div>
           </section>
         )}
+
+        {/* Audit Log Tab */}
+        {activeTab === 'audit' && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Audit Log ({auditLogs.length})
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] gap-1"
+                onClick={() => exportCSV(
+                  auditLogs.map(l => ({
+                    created_at: l.created_at, action: l.action,
+                    admin_id: l.admin_id, target_user_id: l.target_user_id ?? '',
+                    details: l.details ? JSON.stringify(l.details) : '',
+                  })),
+                  `audit-${new Date().toISOString().slice(0, 10)}.csv`
+                )}
+              >
+                <Download className="w-3 h-3" /> Export
+              </Button>
+            </div>
+            {auditLoading ? (
+              <div className="rounded-2xl bg-card border border-border/30 p-8 flex justify-center">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="rounded-2xl bg-card border border-border/30 p-8 text-center">
+                <FileText className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No admin actions recorded yet</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-card border border-border/30 overflow-hidden divide-y divide-border/20">
+                {auditLogs.map(log => (
+                  <div key={log.id} className="p-3 text-xs space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-primary">{log.action}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(log.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {log.target_user_id && (
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        target: <span className="font-mono">{log.target_user_id}</span>
+                      </p>
+                    )}
+                    {log.details && (
+                      <p className="text-[10px] text-muted-foreground/70 font-mono truncate">
+                        {JSON.stringify(log.details)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </motion.div>
     </div>
   );
