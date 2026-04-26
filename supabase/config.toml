@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.admin-api]
 verify_jwt = false
+
+[functions.health]
+verify_jwt = false
+
+[functions.weekly-digest]
+verify_jwt = false
