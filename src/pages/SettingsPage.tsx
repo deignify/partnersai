@@ -11,9 +11,14 @@ import { useTheme } from 'next-themes';
 import ProfileSection from '@/components/settings/ProfileSection';
 import BillingHistory from '@/components/settings/BillingHistory';
 import DangerZone from '@/components/settings/DangerZone';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 
 const SettingsPage = () => {
   const { user, loading: authLoading } = useAuth();
+  useDocumentMeta({
+    title: 'Settings | PartnerAI',
+    description: 'Manage your profile, subscription, theme and privacy preferences.',
+  });
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; messageCount: number; createdAt: string } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();

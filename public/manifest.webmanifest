@@ -1,0 +1,19 @@
+{
+  "name": "PartnerAI",
+  "short_name": "PartnerAI",
+  "description": "Talk to your partner's AI twin — replies in their voice, anytime.",
+  "start_url": "/chat",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0815",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

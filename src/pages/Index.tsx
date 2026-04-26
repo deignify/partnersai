@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -18,6 +19,10 @@ const fadeUp = {
 
 const Index = () => {
   const { user, loading } = useAuth();
+  useDocumentMeta({
+    title: 'PartnerAI — Talk to Your Partner\'s AI Twin',
+    description: 'Upload your WhatsApp chat and PartnerAI learns your partner\'s exact texting style. Chat with their digital twin anytime.',
+  });
   const { plan, refreshUsage } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();

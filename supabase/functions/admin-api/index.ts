@@ -93,12 +93,68 @@ serve(async (req) => {
         const { count: totalMessages } = await adminSupabase.from('chat_messages').select('*', { count: 'exact', head: true });
         const { count: totalPromos } = await adminSupabase.from('promo_codes').select('*', { count: 'exact', head: true });
 
+        // Revenue: compute MRR/ARR from successful payments in payment_history
+        const { data: payments } = await adminSupabase
+          .from('payment_history')
+          .select('amount, currency, plan_duration, status, created_at, user_id');
+
+        // Convert everything to INR for a single revenue figure (rough: 1 USD = 83 INR)
+        const usdToInr = 83;
+        const toInr = (amount: number, currency: string) =>
+          (currency === 'USD' ? amount * usdToInr : amount);
+
+        // Monthly Recurring Revenue: normalize each successful payment to a monthly value
+        const monthlyFactor: Record<string, number> = { week: 4.345, month: 1, year: 1 / 12 };
+        const successful = (payments || []).filter(p => p.status === 'success');
+
+        const totalRevenue = successful.reduce(
+          (sum, p) => sum + toInr(Number(p.amount), p.currency),
+          0
+        );
+
+        // Active subs only count toward MRR
+        const activeProSubs = (subs || []).filter(
+          s => s.plan === 'pro' && s.status === 'active' &&
+            (!s.current_period_end || new Date(s.current_period_end) > new Date())
+        );
+
+        // For each active pro sub, find the latest matching payment and amortize to monthly
+        let mrr = 0;
+        for (const sub of activeProSubs) {
+          const userPayments = successful
+            .filter(p => p.user_id === (sub as any).user_id)
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          const latest = userPayments[0];
+          if (latest) {
+            const dur = (latest.plan_duration as string) || sub.plan_duration || 'month';
+            mrr += toInr(Number(latest.amount), latest.currency) * (monthlyFactor[dur] ?? 1);
+          } else {
+            // Fallback estimate: 499 INR/month for active pro without payment record
+            mrr += 499 * (monthlyFactor[sub.plan_duration || 'month'] ?? 1);
+          }
+        }
+
+        // New users in last 7 / 30 days
+        const now = Date.now();
+        const day = 86400000;
+        const newUsers7d = (users?.users || []).filter(
+          u => new Date(u.created_at).getTime() > now - 7 * day
+        ).length;
+        const newUsers30d = (users?.users || []).filter(
+          u => new Date(u.created_at).getTime() > now - 30 * day
+        ).length;
+
         return new Response(JSON.stringify({
           totalUsers,
           proUsers,
           freeUsers: totalUsers - proUsers,
           totalMessages: totalMessages || 0,
           totalPromos: totalPromos || 0,
+          mrr: Math.round(mrr),
+          arr: Math.round(mrr * 12),
+          totalRevenue: Math.round(totalRevenue),
+          newUsers7d,
+          newUsers30d,
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -114,11 +170,49 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      if (action === 'audit-log') {
+        const { data: logs } = await adminSupabase
+          .from('admin_audit_log')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        return new Response(JSON.stringify({ logs: logs || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'payments') {
+        const { data: payments } = await adminSupabase
+          .from('payment_history')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
+        // Enrich with email
+        const { data: usersList } = await adminSupabase.auth.admin.listUsers();
+        const emailMap = new Map((usersList?.users || []).map(u => [u.id, u.email]));
+        const enriched = (payments || []).map(p => ({ ...p, email: emailMap.get(p.user_id) || null }));
+        return new Response(JSON.stringify({ payments: enriched }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // POST actions
     if (req.method === 'POST') {
       const body = await req.json();
+
+      // Helper to write an audit entry (best-effort, never blocks the action)
+      const audit = async (actionName: string, targetUserId: string | null, details: unknown) => {
+        try {
+          await adminSupabase.from('admin_audit_log').insert({
+            admin_id: user.id,
+            action: actionName,
+            target_user_id: targetUserId,
+            details: details as never,
+          });
+        } catch (_) { /* swallow */ }
+      };
 
       if (action === 'update-subscription') {
         const { userId, plan, status, duration } = body;
@@ -133,6 +227,7 @@ serve(async (req) => {
           current_period_end: periodEnd?.toISOString() || null,
         }, { onConflict: 'user_id' });
 
+        await audit('update-subscription', userId, { plan, status, duration });
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -141,6 +236,7 @@ serve(async (req) => {
       if (action === 'delete-subscription') {
         const { userId } = body;
         await adminSupabase.from('user_subscriptions').delete().eq('user_id', userId);
+        await audit('delete-subscription', userId, null);
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -149,6 +245,7 @@ serve(async (req) => {
       if (action === 'add-admin') {
         const { userId } = body;
         await adminSupabase.from('user_roles').upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id,role' });
+        await audit('add-admin', userId, null);
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -157,6 +254,7 @@ serve(async (req) => {
       if (action === 'remove-admin') {
         const { userId } = body;
         await adminSupabase.from('user_roles').delete().eq('user_id', userId).eq('role', 'admin');
+        await audit('remove-admin', userId, null);
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -168,6 +266,7 @@ serve(async (req) => {
         await adminSupabase.from('imported_chats').delete().eq('user_id', userId);
         await adminSupabase.from('chat_sessions').delete().eq('user_id', userId);
         await adminSupabase.from('daily_usage').delete().eq('user_id', userId);
+        await audit('delete-user-data', userId, null);
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -188,6 +287,7 @@ serve(async (req) => {
           created_by: user.id,
         });
         if (error) throw new Error(error.message);
+        await audit('create-promo', null, { code, discount_type, discount_value, plan_duration });
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -198,6 +298,7 @@ serve(async (req) => {
         if (updates.code) updates.code = updates.code.toUpperCase();
         const { error } = await adminSupabase.from('promo_codes').update(updates).eq('id', promoId);
         if (error) throw new Error(error.message);
+        await audit('update-promo', null, { promoId, updates });
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -206,6 +307,7 @@ serve(async (req) => {
       if (action === 'delete-promo') {
         const { promoId } = body;
         await adminSupabase.from('promo_codes').delete().eq('id', promoId);
+        await audit('delete-promo', null, { promoId });
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
