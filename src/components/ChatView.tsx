@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Phone, Settings, Sun, Moon, Sunset, Cloud, BarChart3, MoreVertical, Search, RefreshCw, X } from 'lucide-react';
+import { Send, ArrowLeft, Phone, Settings, Sun, Moon, Sunset, Cloud, BarChart3, MoreVertical, Search, RefreshCw, X, Download, Mail, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -431,6 +431,14 @@ const ChatView = ({ sessionId, importedMessages, meName, otherName, memorySummar
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => chatNavigate('/insights')}>
                     <BarChart3 className="w-4 h-4 mr-2" /> Insights
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleExportChat}>
+                    <Download className="w-4 h-4 mr-2" /> Export chat (.txt)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleWeeklyDigest} disabled={digestLoading}>
+                    {digestLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                    Weekly summary
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
